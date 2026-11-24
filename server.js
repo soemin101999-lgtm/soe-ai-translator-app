@@ -1,116 +1,68 @@
-
-const express = require("express");
-const cors = require("cors");
-const multer = require("multer");
+import express from "express";
+import cors from "cors";
+import { GoogleGenAI } from "@google/genai";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 * 1024 }
-});
+const apiKey = process.env.GEMINI_API_KEY;
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 app.get("/", (req, res) => {
-  res.json({
-    message: "SOE AI TRANSLATOR",
-    status: "Server is ready"
-  });
+  res.json({ status: "ok", service: "SOE AI TRANSLATOR Backend" });
 });
 
-// AI စာသားဘာသာပြန်စနစ်
+app.get("/health", (req, res) => {
+  res.json({ ok: true, hasApiKey: Boolean(apiKey) });
+});
+
 app.post("/api/text-translate", async (req, res) => {
   try {
-    const { text, sourceLanguage } = req.body;
+    const { text, sourceLanguage = "auto" } = req.body || {};
 
-    if (!text || !text.trim()) {
-      return res.status(400).json({
-        error: "ဘာသာပြန်မည့်စာသား ထည့်ပါ။"
+    if (!text || !String(text).trim()) {
+      return res.status(400).json({ error: "ဘာသာပြန်မည့်စာသား လိုအပ်ပါသည်။" });
+    }
+
+    if (!ai) {
+      return res.status(500).json({
+        error: "Render Environment ထဲတွင် GEMINI_API_KEY မရှိသေးပါ။"
       });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const langLabel =
+      sourceLanguage === "th" ? "Thai" :
+      sourceLanguage === "zh" ? "Chinese" :
+      sourceLanguage === "en" ? "English" : "auto-detected language";
 
-    if (!apiKey) {
-      return res.status(503).json({
-        error: "AI API Key မထည့်ရသေးပါ။"
-      });
-    }
-
-    const languages = {
-      en: "English",
-      zh: "Chinese",
-      th: "Thai",
-      auto: "Automatically detect the language"
-    };
-
-    const source = languages[sourceLanguage] || languages.auto;
-
-    const response = await fetch(
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent",
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey
-    },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{
-          text:
-            "Translate the following " + source +
-            " text into natural Myanmar Burmese. " +
-            "Return only the Burmese translation:\n\n" + text
-        }]
-      }]
-    })
-  }
-);
-
-    const result = await response.json();
-
-    if (!response.ok) {
-  console.error("Gemini API Error:", response.status, result);
-
-  return res.status(502).json({
-    error: "AI ဘာသာပြန်မအောင်မြင်ပါ။ Render Logs ကိုစစ်ပါ။"
-  });
-}
-
-    const translation =
-      result.candidates?.[0]?.content?.parts
-        ?.map(part => part.text || "")
-        .join("") || "";
-
-    res.json({
-      originalText: text,
-      translatedText: translation
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `Translate the following ${langLabel} text into natural, clear Myanmar (Burmese). Return ONLY the translated Myanmar text without explanations or quotes:\n\n${text}`
     });
 
-  } catch (error) {
-    res.status(500).json({
-      error: "Server အမှားဖြစ်နေပါသည်။"
+    const translatedText = (response.text || "").trim();
+    if (!translatedText) {
+      return res.status(500).json({ error: "Gemini မှ ဘာသာပြန်ရလဒ် ထွက်မလာပါ။" });
+    }
+
+    return res.json({ translatedText });
+  } catch (err) {
+    console.error("Translate error:", err);
+    return res.status(500).json({
+      error: err.message || "Server ဘက်တွင် ဘာသာပြန် Error တက်နေပါသည်။"
     });
   }
 });
 
-// Video လက်ခံမှုကို ယာယီစမ်းသပ်ရန်
-app.post("/api/translate", upload.single("video"), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({
-      error: "Please upload a video"
-    });
-  }
-
-  res.status(501).json({
-    message: "Video received",
-    status: "Video dubbing is not connected yet"
+app.post("/api/translate", (req, res) => {
+  return res.status(501).json({
+    message: "Video ကို Server က လက်ခံပါပြီ။ AI Video ဘာသာပြန်စနစ် မချိတ်ဆက်ရသေးပါ။"
   });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("SOE AI TRANSLATOR server running on port " + PORT);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
