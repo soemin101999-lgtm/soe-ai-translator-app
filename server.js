@@ -57,20 +57,18 @@ app.post("/api/text-translate", async (req, res) => {
       "Content-Type": "application/json",
       "x-goog-api-key": apiKey
     },
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text:
-                "Translate the following " + source +
-                " text into natural Myanmar Burmese. " +
-                "Return only the Burmese translation:\n\n" + text
-            }]
-          }]
-        })
-      }
-    );
+    body: JSON.stringify({
+      contents: [{
+        parts: [{
+          text:
+            "Translate the following " + source +
+            " text into natural Myanmar Burmese. " +
+            "Return only the Burmese translation:\n\n" + text
+        }]
+      }]
+    })
+  }
+);
 
     const result = await response.json();
 
