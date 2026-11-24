@@ -256,6 +256,55 @@ translateButton.addEventListener("click", async function () {
   }
 });
 
+const textTranslateButton =
+  document.getElementById("textTranslateButton");
+
+textTranslateButton.addEventListener("click", async function () {
+  const inputText = document.getElementById("inputText").value.trim();
+  const sourceLanguage =
+    document.getElementById("textSourceLanguage").value;
+  const output = document.getElementById("translatedText");
+  const textStatus = document.getElementById("textStatus");
+
+  if (!inputText) {
+    textStatus.textContent = "ဘာသာပြန်မည့်စာသား ထည့်ပါ။";
+    return;
+  }
+
+  textTranslateButton.disabled = true;
+  textStatus.textContent = "AI ဘာသာပြန်နေပါသည်...";
+
+  try {
+    const response = await fetch(
+      SERVER_URL + "/api/text-translate",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          text: inputText,
+          sourceLanguage: sourceLanguage
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "ဘာသာပြန်မအောင်မြင်ပါ။");
+    }
+
+    output.value = result.translatedText;
+    textStatus.textContent = "ဘာသာပြန်ပြီးပါပြီ။";
+
+  } catch (error) {
+    textStatus.textContent = error.message;
+  } finally {
+    textTranslateButton.disabled = false;
+  }
+});
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", function () {
     navigator.serviceWorker.register("./sw.js")
