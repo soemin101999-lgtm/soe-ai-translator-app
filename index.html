@@ -8,51 +8,59 @@
 <style>
 *{box-sizing:border-box}
 body{
- margin:0;padding:20px;
+ margin:0;padding:18px;
  background:#101827;color:white;
  font-family:Arial,sans-serif
 }
-header{text-align:center;padding:20px}
-h1{color:#43d5ff;font-size:26px}
+header{text-align:center;padding:20px 0}
+h1{color:#46d5ff;font-size:26px}
 .card{
- background:#1d2b40;
+ background:#1e2b40;
  padding:18px;border-radius:16px;
  margin:16px 0
 }
-label{display:block;margin:12px 0 8px}
+label{display:block;margin:14px 0 8px}
 input,select{
  width:100%;padding:13px;
- border:0;border-radius:9px;
- font-size:16px
+ border:0;border-radius:10px;
+ font-size:16px;background:white;color:#111
 }
 button{
  width:100%;padding:15px;
- border:0;border-radius:10px;
- background:#22c5ee;
+ border:0;border-radius:11px;
+ background:#25c5ee;color:#061421;
  font-size:17px;font-weight:bold;
  margin-top:15px
 }
-video{width:100%;border-radius:12px}
-#status{color:#75ddff;line-height:1.6}
-.small{color:#b6c5d8;font-size:13px}
+video{width:100%;margin-top:15px;border-radius:12px}
+.small{color:#aebed0;font-size:13px;line-height:1.6}
+#status{color:#62d9ff;line-height:1.6}
+.ad{
+ border:1px dashed #6b819b;
+ text-align:center;padding:17px;
+ border-radius:12px;color:#b9c9dc
+}
 </style>
 </head>
+
 <body>
 
 <header>
 <h1>SOE AI TRANSLATOR</h1>
-<p>AI Video Myanmar Dubbing</p>
+<p>AI VIDEO MYANMAR DUBBING</p>
+<p class="small">ဗီဒီယိုကို မြန်မာအသံဖြင့် ဘာသာပြန်ပါ</p>
 </header>
 
 <div class="card">
-<h3>ဗီဒီယိုရွေးချယ်ပါ</h3>
-<input type="file" id="video"
-accept="video/*">
+<h3>🎬 ဗီဒီယိုရွေးချယ်ပါ</h3>
+<input type="file" id="videoFile" accept="video/*">
 <div id="preview"></div>
+<p id="fileInfo" class="small"></p>
 </div>
 
 <div class="card">
-<h3>ဘာသာစကား</h3>
+<h3>🌐 ဘာသာစကား</h3>
+
 <label>မူရင်းဘာသာစကား</label>
 <select id="language">
 <option value="English">English</option>
@@ -67,44 +75,68 @@ accept="video/*">
 </div>
 
 <div class="card">
-<h3>အသံပြောင်းလဲမှု</h3>
+<h3>🔊 အသံပြင်ဆင်မှု</h3>
 <p>✓ မူရင်းနောက်ခံအသံ ထိန်းထားရန်</p>
 <p>✓ မြန်မာအမျိုးသားအသံ ထည့်ရန်</p>
-<p>✓ MP4 Video ထုတ်ရန်</p>
+<p>✓ MP4 ဗီဒီယိုထုတ်ရန်</p>
 <p class="small">
-AI Server ချိတ်ဆက်ပြီးမှ ဗီဒီယိုကို
-အမှန်တကယ် ဘာသာပြန်နိုင်ပါမည်။
+နောက်ခံတေးဂီတနှင့် စကားပြောသံကို
+AI Server မှ ခွဲခြားပေးရပါမည်။
 </p>
-<button onclick="startAI()">
+</div>
+
+<div class="card">
+<h3>🚀 AI ဘာသာပြန်ခြင်း</h3>
+<button onclick="startTranslation()">
 ဘာသာပြန်စတင်မယ်
 </button>
 <p id="status">ဗီဒီယိုရွေးချယ်ရန် အသင့်ဖြစ်ပါပြီ။</p>
 </div>
 
-<script>
-const fileInput=document.getElementById("video");
+<div class="card ad">
+<h3>📢 ကြော်ငြာ</h3>
+<p>Advertisement Banner</p>
+<p class="small">
+ကြော်ငြာဝန်ဆောင်မှု ချိတ်ဆက်ပြီးမှ
+အမှန်တကယ်ကြော်ငြာ ပြသပါမည်။
+</p>
+</div>
 
-fileInput.addEventListener("change",function(){
+<footer style="text-align:center;color:#8294aa">
+SOE AI TRANSLATOR © 2026
+</footer>
+
+<script>
+const videoFile=document.getElementById("videoFile");
+
+videoFile.addEventListener("change",function(){
  const file=this.files[0];
  if(!file)return;
 
  const url=URL.createObjectURL(file);
+
  document.getElementById("preview").innerHTML=
  '<video controls playsinline src="'+url+'"></video>';
 
+ document.getElementById("fileInfo").textContent=
+ "ရွေးထားသောဖိုင်: "+file.name;
  document.getElementById("status").textContent=
- "ဗီဒီယိုရွေးပြီးပါပြီ။ AI Server ချိတ်ဆက်ရန် အသင့်ဖြစ်ပါပြီ။";
+ "ဗီဒီယိုရွေးချယ်ပြီးပါပြီ။";
 });
 
-function startAI(){
- if(!fileInput.files.length){
-  document.getElementById("status").textContent=
-  "အရင်ဆုံး ဗီဒီယိုတစ်ခု ရွေးချယ်ပါ။";
+async function startTranslation(){
+ const file=videoFile.files[0];
+ const status=document.getElementById("status");
+
+ if(!file){
+  status.textContent="ဗီဒီယိုအရင်ရွေးချယ်ပါ။";
   return;
  }
 
- document.getElementById("status").textContent=
- "AI Server မချိတ်ဆက်ရသေးပါ။ နောက်အဆင့်တွင် ချိတ်ဆက်ပါမည်။";
+ status.textContent=
+ "AI Server ချိတ်ဆက်ရန် လိုအပ်ပါသည်။";
+
+ // AI Server API ကို နောက်အဆင့်တွင် ချိတ်ဆက်မည်။
 }
 </script>
 
