@@ -144,6 +144,9 @@ footer {
 </footer>
 
 </div>
+
+<script>
+
 const videoFile = document.getElementById("videoFile");
 const videoPreview = document.getElementById("videoPreview");
 const statusText = document.getElementById("status");
@@ -228,47 +231,7 @@ if ("serviceWorker" in navigator) {
       .catch(error => console.log(error));
   });
 }
-<script>
-const videoFile = document.getElementById("videoFile");
-const videoPreview = document.getElementById("videoPreview");
-const statusText = document.getElementById("status");
-const translateButton = document.getElementById("translateButton");
 
-let currentVideoURL = null;
-
-videoFile.addEventListener("change", function() {
-  const file = this.files[0];
-
-  if (!file) return;
-
-  if (currentVideoURL) {
-    URL.revokeObjectURL(currentVideoURL);
-  }
-
-  currentVideoURL = URL.createObjectURL(file);
-  videoPreview.src = currentVideoURL;
-  videoPreview.hidden = false;
-
-  statusText.textContent =
-    "Video ရွေးချယ်ပြီးပါပြီ။ AI Server ချိတ်ဆက်ရန် လိုအပ်ပါသည်။";
-});
-
-translateButton.addEventListener("click", function() {
-  if (!videoFile.files[0]) {
-    statusText.textContent = "အရင်ဆုံး Video ရွေးချယ်ပါ။";
-    return;
-  }
-
-  statusText.textContent =
-    "AI Server မချိတ်ဆက်ရသေးပါ။ ဘာသာပြန်ရန် Server လိုအပ်ပါသည်။";
-});
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", function() {
-    navigator.serviceWorker.register("./sw.js")
-      .catch(error => console.log(error));
-  });
-}
 </script>
 
 </body>
