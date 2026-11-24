@@ -50,11 +50,12 @@ app.post("/api/text-translate", async (req, res) => {
     const source = languages[sourceLanguage] || languages.auto;
 
     const response = await fetch(
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=" + apiKey,
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent",
   {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey
     },
           "Content-Type": "application/json"
         },
@@ -74,10 +75,12 @@ app.post("/api/text-translate", async (req, res) => {
     const result = await response.json();
 
     if (!response.ok) {
-      return res.status(502).json({
-        error: "AI ဘာသာပြန်ဝန်ဆောင်မှုမှ အမှားပြန်လာပါသည်။"
-      });
-    }
+  console.error("Gemini API Error:", response.status, result);
+
+  return res.status(502).json({
+    error: "AI ဘာသာပြန်မအောင်မြင်ပါ။ Render Logs ကိုစစ်ပါ။"
+  });
+}
 
     const translation =
       result.candidates?.[0]?.content?.parts
