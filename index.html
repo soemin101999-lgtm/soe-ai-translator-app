@@ -24,7 +24,7 @@ header {
   text-align: center;
   padding: 20px 5px;
 }
-h1 { color: #35c9ff; }
+h1 { color: #35c9ff; margin-bottom: 6px; }
 .panel {
   background: #1c293c;
   padding: 18px;
@@ -35,16 +35,20 @@ label {
   display: block;
   margin: 14px 0 7px;
 }
-input, select, button {
+input, select, textarea, button {
   width: 100%;
   padding: 13px;
   border-radius: 9px;
   border: 0;
   font-size: 16px;
 }
-input, select {
+input, select, textarea {
   background: #edf3fa;
   color: #111827;
+}
+textarea {
+  height: 120px;
+  resize: vertical;
 }
 video {
   width: 100%;
@@ -57,14 +61,23 @@ button {
   color: white;
   font-weight: bold;
   margin-top: 15px;
+  cursor: pointer;
 }
 button:disabled {
   background: #64748b;
+  cursor: not-allowed;
 }
 .status {
   color: #a8dfff;
   text-align: center;
-  margin-top: 15px;
+  margin-top: 14px;
+  word-break: break-word;
+}
+.error-text {
+  color: #ff7b7b;
+}
+.ok-text {
+  color: #5eead4;
 }
 .ad {
   text-align: center;
@@ -87,17 +100,13 @@ footer {
 
 <header>
   <h1>SOE AI TRANSLATOR</h1>
-  <p>AI Video Translation to Myanmar Language</p>
+  <p>AI Video & Text Translation to Myanmar Language</p>
 </header>
 
 <div class="panel">
   <h3>🎬 Video ရွေးချယ်ပါ</h3>
   <input type="file" id="videoFile" accept="video/*">
   <video id="videoPreview" controls playsinline hidden></video>
-</div>
-
-<div class="panel">
-  <h3>🌐 ဘာသာပြန်ခြင်း</h3>
 
   <label>မူရင်းဘာသာစကား</label>
   <select id="sourceLanguage">
@@ -117,13 +126,9 @@ footer {
     <option value="male">မြန်မာအမျိုးသားအသံ</option>
   </select>
 
-  <button id="translateButton">
-    ▶ ဘာသာပြန်စတင်မည်
-  </button>
+  <button id="translateButton">▶ ဘာသာပြန်စတင်မည်</button>
 
-  <p class="status" id="status">
-    Video ရွေးချယ်ရန် အသင့်ဖြစ်ပါပြီ။
-  </p>
+  <p class="status" id="status">Video ရွေးချယ်ရန် အသင့်ဖြစ်ပါပြီ။</p>
 </div>
 
 <div class="panel">
@@ -138,21 +143,12 @@ footer {
   </select>
 
   <label>ဘာသာပြန်မည့်စာသား</label>
-  <textarea id="inputText"
-    placeholder="ဘာသာပြန်မည့်စာသားကို ဒီမှာထည့်ပါ..."
-    style="width:100%;height:120px;padding:12px;border-radius:9px;">
-  </textarea>
+  <textarea id="inputText" placeholder="ဘာသာပြန်မည့်စာသားကို ဒီမှာထည့်ပါ..."></textarea>
 
-  <button id="textTranslateButton">
-    မြန်မာဘာသာပြန်မည်
-  </button>
+  <button id="textTranslateButton">မြန်မာဘာသာပြန်မည်</button>
 
   <label>မြန်မာဘာသာပြန်ရလဒ်</label>
-  <textarea id="translatedText"
-    readonly
-    placeholder="ဘာသာပြန်ရလဒ် ဒီမှာပေါ်လာပါမည်..."
-    style="width:100%;height:120px;padding:12px;border-radius:9px;">
-  </textarea>
+  <textarea id="translatedText" readonly placeholder="ဘာသာပြန်ရလဒ် ဒီမှာပေါ်လာပါမည်..."></textarea>
 
   <p id="textStatus" class="status"></p>
 </div>
@@ -162,7 +158,7 @@ footer {
   <p>မူရင်းစကားပြောသံကို မြန်မာအသံဖြင့် အစားထိုးရန်</p>
   <p>နောက်ခံတေးဂီတကို ထိန်းသိမ်းရန်</p>
   <p>MP4 ဖိုင်အဖြစ် ထုတ်ယူရန်</p>
-  <p class="status">AI Server ချိတ်ဆက်ရန် လိုအပ်ပါသည်။</p>
+  <p class="status" id="serverStatus">AI Server အခြေအနေ စစ်ဆေးနေပါသည်...</p>
 </div>
 
 <div class="ad">
@@ -177,15 +173,33 @@ footer {
 </div>
 
 <script>
+const SERVER_URL = "https://soe-ai-translator-app.onrender.com";
 
 const videoFile = document.getElementById("videoFile");
 const videoPreview = document.getElementById("videoPreview");
 const statusText = document.getElementById("status");
 const translateButton = document.getElementById("translateButton");
-
-const SERVER_URL = "https://soe-ai-translator-app.onrender.com";
+const serverStatus = document.getElementById("serverStatus");
 
 let currentVideoURL = null;
+
+// Server ချိတ်ဆက်မှု အခြေအနေ စစ်ဆေးခြင်း
+async function checkServerHealth() {
+  try {
+    const res = await fetch(SERVER_URL + "/health");
+    if (res.ok) {
+      serverStatus.textContent = "AI Server ချိတ်ဆက်မှု အဆင်ပြေပါသည်။";
+      serverStatus.className = "status ok-text";
+    } else {
+      serverStatus.textContent = "AI Server ကို စစ်ဆေးရန် လိုအပ်ပါသည်။ (Status: " + res.status + ")";
+      serverStatus.className = "status error-text";
+    }
+  } catch (err) {
+    serverStatus.textContent = "AI Server ချိတ်ဆက်ရန် လိုအပ်ပါသည်။ (Server နိုးနေမနေ စစ်ပါ)";
+    serverStatus.className = "status error-text";
+  }
+}
+checkServerHealth();
 
 videoFile.addEventListener("change", function () {
   const file = this.files[0];
@@ -200,106 +214,100 @@ videoFile.addEventListener("change", function () {
   videoPreview.hidden = false;
 
   statusText.textContent = "Video ရွေးချယ်ပြီးပါပြီ။";
+  statusText.className = "status";
 });
 
 translateButton.addEventListener("click", async function () {
   const file = videoFile.files[0];
-
   if (!file) {
     statusText.textContent = "အရင်ဆုံး Video ရွေးချယ်ပါ။";
+    statusText.className = "status error-text";
     return;
   }
 
   const formData = new FormData();
   formData.append("video", file);
-  formData.append(
-    "sourceLanguage",
-    document.getElementById("sourceLanguage").value
-  );
-  formData.append(
-    "targetLanguage",
-    document.getElementById("targetLanguage").value
-  );
-  formData.append(
-    "voice",
-    document.getElementById("voice").value
-  );
+  formData.append("sourceLanguage", document.getElementById("sourceLanguage").value);
+  formData.append("targetLanguage", document.getElementById("targetLanguage").value);
+  formData.append("voice", document.getElementById("voice").value);
 
   translateButton.disabled = true;
   statusText.textContent = "Server သို့ Video ပို့နေပါသည်...";
+  statusText.className = "status";
 
   try {
-    const response = await fetch(
-      SERVER_URL + "/api/translate",
-      {
-        method: "POST",
-        body: formData
-      }
-    );
+    const response = await fetch(SERVER_URL + "/api/translate", {
+      method: "POST",
+      body: formData
+    });
 
-    const result = await response.json();
+    const result = await response.json().catch(() => ({}));
 
     if (response.status === 501) {
-      statusText.textContent =
-        "Video ကို Server က လက်ခံပါပြီ။ AI ဘာသာပြန်စနစ် မချိတ်ဆက်ရသေးပါ။";
+      statusText.textContent = result.message || "Video ကို Server က လက်ခံပါပြီ။ AI Video ဘာသာပြန်စနစ် မချိတ်ဆက်ရသေးပါ။";
+      statusText.className = "status";
     } else if (!response.ok) {
-      throw new Error(result.error || "Server Error");
+      throw new Error(result.error || "Server Error (" + response.status + ")");
     } else {
-      statusText.textContent =
-        result.message || "Server မှ တုံ့ပြန်ချက်ရရှိပါပြီ။";
+      statusText.textContent = result.message || "ပြီးစီးပါပြီ။";
+      statusText.className = "status ok-text";
     }
   } catch (error) {
-    statusText.textContent =
-      "Server ချိတ်ဆက်မှု မအောင်မြင်ပါ။ " + error.message;
+    statusText.textContent = "Server ချိတ်ဆက်မှု မအောင်မြင်ပါ။ " + error.message;
+    statusText.className = "status error-text";
   } finally {
     translateButton.disabled = false;
   }
 });
 
-const textTranslateButton =
-  document.getElementById("textTranslateButton");
+const textTranslateButton = document.getElementById("textTranslateButton");
 
 textTranslateButton.addEventListener("click", async function () {
   const inputText = document.getElementById("inputText").value.trim();
-  const sourceLanguage =
-    document.getElementById("textSourceLanguage").value;
+  const sourceLanguage = document.getElementById("textSourceLanguage").value;
   const output = document.getElementById("translatedText");
   const textStatus = document.getElementById("textStatus");
 
   if (!inputText) {
     textStatus.textContent = "ဘာသာပြန်မည့်စာသား ထည့်ပါ။";
+    textStatus.className = "status error-text";
     return;
   }
 
   textTranslateButton.disabled = true;
   textStatus.textContent = "AI ဘာသာပြန်နေပါသည်...";
+  textStatus.className = "status";
+  output.value = "";
 
   try {
-    const response = await fetch(
-      SERVER_URL + "/api/text-translate",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          text: inputText,
-          sourceLanguage: sourceLanguage
-        })
-      }
-    );
+    const response = await fetch(SERVER_URL + "/api/text-translate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        text: inputText,
+        sourceLanguage: sourceLanguage
+      })
+    });
 
-    const result = await response.json();
+    const result = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(result.error || "ဘာသာပြန်မအောင်မြင်ပါ။");
+      throw new Error(result.error || "ဘာသာပြန်မအောင်မြင်ပါ။ (Status: " + response.status + ")");
     }
 
-    output.value = result.translatedText;
-    textStatus.textContent = "ဘာသာပြန်ပြီးပါပြီ။";
+    const translated = result.translatedText ?? result.translation ?? "";
+    if (!translated) {
+      throw new Error("Server မှ ဘာသာပြန်စာသား ပြန်မလာပါ။");
+    }
 
+    output.value = translated;
+    textStatus.textContent = "ဘာသာပြန်ပြီးပါပြီ။";
+    textStatus.className = "status ok-text";
   } catch (error) {
-    textStatus.textContent = error.message;
+    textStatus.textContent = "Error: " + error.message;
+    textStatus.className = "status error-text";
   } finally {
     textTranslateButton.disabled = false;
   }
@@ -307,11 +315,9 @@ textTranslateButton.addEventListener("click", async function () {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", function () {
-    navigator.serviceWorker.register("./sw.js")
-      .catch(error => console.log(error));
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
   });
 }
-
 </script>
 
 </body>
