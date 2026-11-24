@@ -39,7 +39,7 @@ app.post("/api/text-translate", async (req, res) => {
       sourceLanguage === "en" ? "English" : "auto-detected language";
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.8-flash",
       contents: `Translate the following ${langLabel} text into natural, clear Myanmar (Burmese). Return ONLY the translated Myanmar text without explanations or quotes:\n\n${text}`
     });
 
