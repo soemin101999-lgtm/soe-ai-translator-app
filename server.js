@@ -50,10 +50,12 @@ app.post("/api/text-translate", async (req, res) => {
     const source = languages[sourceLanguage] || languages.auto;
 
     const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=" + apiKey,
-      {
-        method: "POST",
-        headers: {
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=" + apiKey,
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
