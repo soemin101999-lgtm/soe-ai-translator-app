@@ -1,142 +1,190 @@
-
 <!DOCTYPE html>
 <html lang="my">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#101827">
+<link rel="manifest" href="./manifest.json">
 <title>SOE AI TRANSLATOR</title>
+
 <style>
-*{box-sizing:border-box}
-body{
- margin:0;padding:18px;
- background:#101827;color:white;
- font-family:Arial,sans-serif
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 18px;
+  background: #101827;
+  color: white;
+  font-family: Arial, sans-serif;
 }
-header{text-align:center;padding:20px 0}
-h1{color:#46d5ff;font-size:26px}
-.card{
- background:#1e2b40;
- padding:18px;border-radius:16px;
- margin:16px 0
+.container {
+  max-width: 600px;
+  margin: auto;
 }
-label{display:block;margin:14px 0 8px}
-input,select{
- width:100%;padding:13px;
- border:0;border-radius:10px;
- font-size:16px;background:white;color:#111
+header {
+  text-align: center;
+  padding: 20px 5px;
 }
-button{
- width:100%;padding:15px;
- border:0;border-radius:11px;
- background:#25c5ee;color:#061421;
- font-size:17px;font-weight:bold;
- margin-top:15px
+h1 { color: #35c9ff; }
+.panel {
+  background: #1c293c;
+  padding: 18px;
+  border-radius: 15px;
+  margin-bottom: 16px;
 }
-video{width:100%;margin-top:15px;border-radius:12px}
-.small{color:#aebed0;font-size:13px;line-height:1.6}
-#status{color:#62d9ff;line-height:1.6}
-.ad{
- border:1px dashed #6b819b;
- text-align:center;padding:17px;
- border-radius:12px;color:#b9c9dc
+label {
+  display: block;
+  margin: 14px 0 7px;
+}
+input, select, button {
+  width: 100%;
+  padding: 13px;
+  border-radius: 9px;
+  border: 0;
+  font-size: 16px;
+}
+input, select {
+  background: #edf3fa;
+  color: #111827;
+}
+video {
+  width: 100%;
+  margin-top: 14px;
+  border-radius: 10px;
+  background: black;
+}
+button {
+  background: #16a8e0;
+  color: white;
+  font-weight: bold;
+  margin-top: 15px;
+}
+button:disabled {
+  background: #64748b;
+}
+.status {
+  color: #a8dfff;
+  text-align: center;
+  margin-top: 15px;
+}
+.ad {
+  text-align: center;
+  border: 1px dashed #7b8da5;
+  padding: 18px;
+  border-radius: 10px;
+  color: #b8c6d8;
+}
+footer {
+  text-align: center;
+  color: #91a1b6;
+  font-size: 13px;
+  margin-top: 25px;
 }
 </style>
 </head>
 
 <body>
+<div class="container">
 
 <header>
-<h1>SOE AI TRANSLATOR</h1>
-<p>AI VIDEO MYANMAR DUBBING</p>
-<p class="small">ဗီဒီယိုကို မြန်မာအသံဖြင့် ဘာသာပြန်ပါ</p>
+  <h1>SOE AI TRANSLATOR</h1>
+  <p>AI Video Translation to Myanmar Language</p>
 </header>
 
-<div class="card">
-<h3>🎬 ဗီဒီယိုရွေးချယ်ပါ</h3>
-<input type="file" id="videoFile" accept="video/*">
-<div id="preview"></div>
-<p id="fileInfo" class="small"></p>
+<div class="panel">
+  <h3>🎬 Video ရွေးချယ်ပါ</h3>
+  <input type="file" id="videoFile" accept="video/*">
+  <video id="videoPreview" controls playsinline hidden></video>
 </div>
 
-<div class="card">
-<h3>🌐 ဘာသာစကား</h3>
+<div class="panel">
+  <h3>🌐 ဘာသာပြန်ခြင်း</h3>
 
-<label>မူရင်းဘာသာစကား</label>
-<select id="language">
-<option value="English">English</option>
-<option value="Chinese">Chinese</option>
-<option value="Thai">Thai</option>
-</select>
+  <label>မူရင်းဘာသာစကား</label>
+  <select id="sourceLanguage">
+    <option value="en">English</option>
+    <option value="zh">Chinese</option>
+    <option value="th">Thai</option>
+    <option value="auto">Auto Detect</option>
+  </select>
 
-<label>ပြန်ဆိုမည့်အသံ</label>
-<select id="voice">
-<option value="Thiha">မြန်မာအမျိုးသားအသံ</option>
-</select>
+  <label>ပြန်ဆိုမည့်ဘာသာစကား</label>
+  <select id="targetLanguage">
+    <option value="my">Myanmar (မြန်မာ)</option>
+  </select>
+
+  <label>အသံရွေးချယ်ပါ</label>
+  <select id="voice">
+    <option value="male">မြန်မာအမျိုးသားအသံ</option>
+  </select>
+
+  <button id="translateButton">
+    ▶ ဘာသာပြန်စတင်မည်
+  </button>
+
+  <p class="status" id="status">
+    Video ရွေးချယ်ရန် အသင့်ဖြစ်ပါပြီ။
+  </p>
 </div>
 
-<div class="card">
-<h3>🔊 အသံပြင်ဆင်မှု</h3>
-<p>✓ မူရင်းနောက်ခံအသံ ထိန်းထားရန်</p>
-<p>✓ မြန်မာအမျိုးသားအသံ ထည့်ရန်</p>
-<p>✓ MP4 ဗီဒီယိုထုတ်ရန်</p>
-<p class="small">
-နောက်ခံတေးဂီတနှင့် စကားပြောသံကို
-AI Server မှ ခွဲခြားပေးရပါမည်။
-</p>
+<div class="panel">
+  <h3>🎵 အသံစနစ်</h3>
+  <p>မူရင်းစကားပြောသံကို မြန်မာအသံဖြင့် အစားထိုးရန်</p>
+  <p>နောက်ခံတေးဂီတကို ထိန်းသိမ်းရန်</p>
+  <p>MP4 ဖိုင်အဖြစ် ထုတ်ယူရန်</p>
+  <p class="status">AI Server ချိတ်ဆက်ရန် လိုအပ်ပါသည်။</p>
 </div>
 
-<div class="card">
-<h3>🚀 AI ဘာသာပြန်ခြင်း</h3>
-<button onclick="startTranslation()">
-ဘာသာပြန်စတင်မယ်
-</button>
-<p id="status">ဗီဒီယိုရွေးချယ်ရန် အသင့်ဖြစ်ပါပြီ။</p>
+<div class="ad">
+  Advertisement Banner
+  <p>ကြော်ငြာနေရာ (နမူနာသာ)</p>
 </div>
 
-<div class="card ad">
-<h3>📢 ကြော်ငြာ</h3>
-<p>Advertisement Banner</p>
-<p class="small">
-ကြော်ငြာဝန်ဆောင်မှု ချိတ်ဆက်ပြီးမှ
-အမှန်တကယ်ကြော်ငြာ ပြသပါမည်။
-</p>
-</div>
-
-<footer style="text-align:center;color:#8294aa">
-SOE AI TRANSLATOR © 2026
+<footer>
+  © 2026 SOE AI TRANSLATOR
 </footer>
 
+</div>
+
 <script>
-const videoFile=document.getElementById("videoFile");
+const videoFile = document.getElementById("videoFile");
+const videoPreview = document.getElementById("videoPreview");
+const statusText = document.getElementById("status");
+const translateButton = document.getElementById("translateButton");
 
-videoFile.addEventListener("change",function(){
- const file=this.files[0];
- if(!file)return;
+let currentVideoURL = null;
 
- const url=URL.createObjectURL(file);
+videoFile.addEventListener("change", function() {
+  const file = this.files[0];
 
- document.getElementById("preview").innerHTML=
- '<video controls playsinline src="'+url+'"></video>';
+  if (!file) return;
 
- document.getElementById("fileInfo").textContent=
- "ရွေးထားသောဖိုင်: "+file.name;
- document.getElementById("status").textContent=
- "ဗီဒီယိုရွေးချယ်ပြီးပါပြီ။";
+  if (currentVideoURL) {
+    URL.revokeObjectURL(currentVideoURL);
+  }
+
+  currentVideoURL = URL.createObjectURL(file);
+  videoPreview.src = currentVideoURL;
+  videoPreview.hidden = false;
+
+  statusText.textContent =
+    "Video ရွေးချယ်ပြီးပါပြီ။ AI Server ချိတ်ဆက်ရန် လိုအပ်ပါသည်။";
 });
 
-async function startTranslation(){
- const file=videoFile.files[0];
- const status=document.getElementById("status");
+translateButton.addEventListener("click", function() {
+  if (!videoFile.files[0]) {
+    statusText.textContent = "အရင်ဆုံး Video ရွေးချယ်ပါ။";
+    return;
+  }
 
- if(!file){
-  status.textContent="ဗီဒီယိုအရင်ရွေးချယ်ပါ။";
-  return;
- }
+  statusText.textContent =
+    "AI Server မချိတ်ဆက်ရသေးပါ။ ဘာသာပြန်ရန် Server လိုအပ်ပါသည်။";
+});
 
- status.textContent=
- "AI Server ချိတ်ဆက်ရန် လိုအပ်ပါသည်။";
-
- // AI Server API ကို နောက်အဆင့်တွင် ချိတ်ဆက်မည်။
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function() {
+    navigator.serviceWorker.register("./sw.js")
+      .catch(error => console.log(error));
+  });
 }
 </script>
 
