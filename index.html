@@ -127,6 +127,37 @@ footer {
 </div>
 
 <div class="panel">
+  <h3>🌐 AI စာသားဘာသာပြန်စနစ်</h3>
+
+  <label>မူရင်းဘာသာစကား</label>
+  <select id="textSourceLanguage">
+    <option value="en">English</option>
+    <option value="zh">Chinese</option>
+    <option value="th">Thai</option>
+    <option value="auto">Auto Detect</option>
+  </select>
+
+  <label>ဘာသာပြန်မည့်စာသား</label>
+  <textarea id="inputText"
+    placeholder="ဘာသာပြန်မည့်စာသားကို ဒီမှာထည့်ပါ..."
+    style="width:100%;height:120px;padding:12px;border-radius:9px;">
+  </textarea>
+
+  <button id="textTranslateButton">
+    မြန်မာဘာသာပြန်မည်
+  </button>
+
+  <label>မြန်မာဘာသာပြန်ရလဒ်</label>
+  <textarea id="translatedText"
+    readonly
+    placeholder="ဘာသာပြန်ရလဒ် ဒီမှာပေါ်လာပါမည်..."
+    style="width:100%;height:120px;padding:12px;border-radius:9px;">
+  </textarea>
+
+  <p id="textStatus" class="status"></p>
+</div>
+
+<div class="panel">
   <h3>🎵 အသံစနစ်</h3>
   <p>မူရင်းစကားပြောသံကို မြန်မာအသံဖြင့် အစားထိုးရန်</p>
   <p>နောက်ခံတေးဂီတကို ထိန်းသိမ်းရန်</p>
