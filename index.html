@@ -1,0 +1,112 @@
+
+<!DOCTYPE html>
+<html lang="my">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOE AI TRANSLATOR</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;padding:20px;
+ background:#101827;color:white;
+ font-family:Arial,sans-serif
+}
+header{text-align:center;padding:20px}
+h1{color:#43d5ff;font-size:26px}
+.card{
+ background:#1d2b40;
+ padding:18px;border-radius:16px;
+ margin:16px 0
+}
+label{display:block;margin:12px 0 8px}
+input,select{
+ width:100%;padding:13px;
+ border:0;border-radius:9px;
+ font-size:16px
+}
+button{
+ width:100%;padding:15px;
+ border:0;border-radius:10px;
+ background:#22c5ee;
+ font-size:17px;font-weight:bold;
+ margin-top:15px
+}
+video{width:100%;border-radius:12px}
+#status{color:#75ddff;line-height:1.6}
+.small{color:#b6c5d8;font-size:13px}
+</style>
+</head>
+<body>
+
+<header>
+<h1>SOE AI TRANSLATOR</h1>
+<p>AI Video Myanmar Dubbing</p>
+</header>
+
+<div class="card">
+<h3>ဗီဒီယိုရွေးချယ်ပါ</h3>
+<input type="file" id="video"
+accept="video/*">
+<div id="preview"></div>
+</div>
+
+<div class="card">
+<h3>ဘာသာစကား</h3>
+<label>မူရင်းဘာသာစကား</label>
+<select id="language">
+<option value="English">English</option>
+<option value="Chinese">Chinese</option>
+<option value="Thai">Thai</option>
+</select>
+
+<label>ပြန်ဆိုမည့်အသံ</label>
+<select id="voice">
+<option value="Thiha">မြန်မာအမျိုးသားအသံ</option>
+</select>
+</div>
+
+<div class="card">
+<h3>အသံပြောင်းလဲမှု</h3>
+<p>✓ မူရင်းနောက်ခံအသံ ထိန်းထားရန်</p>
+<p>✓ မြန်မာအမျိုးသားအသံ ထည့်ရန်</p>
+<p>✓ MP4 Video ထုတ်ရန်</p>
+<p class="small">
+AI Server ချိတ်ဆက်ပြီးမှ ဗီဒီယိုကို
+အမှန်တကယ် ဘာသာပြန်နိုင်ပါမည်။
+</p>
+<button onclick="startAI()">
+ဘာသာပြန်စတင်မယ်
+</button>
+<p id="status">ဗီဒီယိုရွေးချယ်ရန် အသင့်ဖြစ်ပါပြီ။</p>
+</div>
+
+<script>
+const fileInput=document.getElementById("video");
+
+fileInput.addEventListener("change",function(){
+ const file=this.files[0];
+ if(!file)return;
+
+ const url=URL.createObjectURL(file);
+ document.getElementById("preview").innerHTML=
+ '<video controls playsinline src="'+url+'"></video>';
+
+ document.getElementById("status").textContent=
+ "ဗီဒီယိုရွေးပြီးပါပြီ။ AI Server ချိတ်ဆက်ရန် အသင့်ဖြစ်ပါပြီ။";
+});
+
+function startAI(){
+ if(!fileInput.files.length){
+  document.getElementById("status").textContent=
+  "အရင်ဆုံး ဗီဒီယိုတစ်ခု ရွေးချယ်ပါ။";
+  return;
+ }
+
+ document.getElementById("status").textContent=
+ "AI Server မချိတ်ဆက်ရသေးပါ။ နောက်အဆင့်တွင် ချိတ်ဆက်ပါမည်။";
+}
+</script>
+
+</body>
+</html>
