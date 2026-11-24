@@ -144,7 +144,90 @@ footer {
 </footer>
 
 </div>
+const videoFile = document.getElementById("videoFile");
+const videoPreview = document.getElementById("videoPreview");
+const statusText = document.getElementById("status");
+const translateButton = document.getElementById("translateButton");
 
+const SERVER_URL = "https://soe-ai-translator-app.onrender.com";
+
+let currentVideoURL = null;
+
+videoFile.addEventListener("change", function () {
+  const file = this.files[0];
+  if (!file) return;
+
+  if (currentVideoURL) {
+    URL.revokeObjectURL(currentVideoURL);
+  }
+
+  currentVideoURL = URL.createObjectURL(file);
+  videoPreview.src = currentVideoURL;
+  videoPreview.hidden = false;
+
+  statusText.textContent = "Video ရွေးချယ်ပြီးပါပြီ။";
+});
+
+translateButton.addEventListener("click", async function () {
+  const file = videoFile.files[0];
+
+  if (!file) {
+    statusText.textContent = "အရင်ဆုံး Video ရွေးချယ်ပါ။";
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("video", file);
+  formData.append(
+    "sourceLanguage",
+    document.getElementById("sourceLanguage").value
+  );
+  formData.append(
+    "targetLanguage",
+    document.getElementById("targetLanguage").value
+  );
+  formData.append(
+    "voice",
+    document.getElementById("voice").value
+  );
+
+  translateButton.disabled = true;
+  statusText.textContent = "Server သို့ Video ပို့နေပါသည်...";
+
+  try {
+    const response = await fetch(
+      SERVER_URL + "/api/translate",
+      {
+        method: "POST",
+        body: formData
+      }
+    );
+
+    const result = await response.json();
+
+    if (response.status === 501) {
+      statusText.textContent =
+        "Video ကို Server က လက်ခံပါပြီ။ AI ဘာသာပြန်စနစ် မချိတ်ဆက်ရသေးပါ။";
+    } else if (!response.ok) {
+      throw new Error(result.error || "Server Error");
+    } else {
+      statusText.textContent =
+        result.message || "Server မှ တုံ့ပြန်ချက်ရရှိပါပြီ။";
+    }
+  } catch (error) {
+    statusText.textContent =
+      "Server ချိတ်ဆက်မှု မအောင်မြင်ပါ။ " + error.message;
+  } finally {
+    translateButton.disabled = false;
+  }
+});
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("./sw.js")
+      .catch(error => console.log(error));
+  });
+}
 <script>
 const videoFile = document.getElementById("videoFile");
 const videoPreview = document.getElementById("videoPreview");
