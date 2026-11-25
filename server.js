@@ -39,7 +39,6 @@ const VOICES = { male: "Charon", female: "Kore" };
 const MAX_VIDEO_SECONDS = 7 * 60;      // 5 မိနစ်ဗီဒီယိုအတွက် အနည်းငယ်ပိုခွင့်ပြု
 const MAX_UPLOAD_BYTES = 300 * 1024 * 1024;
 const TTS_SAMPLE_RATE = 24000;
-const BACKGROUND_VOLUME = 0.12;        // မူရင်းအသံ (နောက်ခံ) ကို လျှော့ထားသည်
 const MAX_TEMPO = 2.0;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -306,10 +305,8 @@ async function processJob(job, file, opts) {
       ttsFilter = `atempo=${tempo.toFixed(3)}`;
     }
 
-    const filter =
-      `[0:a]volume=${BACKGROUND_VOLUME}[bg];` +
-      `[1:a]${ttsFilter}[tts];` +
-      `[bg][tts]amix=inputs=2:duration=longest:dropout_transition=0,volume=2[a]`;
+    // မူရင်းအသံ (နောက်ခံအပါအဝင်) ကို လုံးဝဖယ်ပြီး မြန်မာအသံသာ ထည့်သည်
+    const filter = `[1:a]${ttsFilter},apad[a]`;
 
     const outPath = path.join(dir, "output.mp4");
     const baseArgs = [
