@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="my">
 <head>
-<meta name="monetag" content="...">
+  <meta name="monetag" content="...">
+</head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#101827">
@@ -10,7 +11,6 @@
 
 <style>
 * { box-sizing: border-box; }
-[hidden] { display: none !important; }
 body {
   margin: 0;
   padding: 18px;
@@ -21,24 +21,46 @@ body {
 .container { max-width: 600px; margin: auto; }
 header { text-align: center; padding: 20px 5px; }
 h1 { color: #35c9ff; margin-bottom: 6px; }
-.panel { background: #1c293c; padding: 18px; border-radius: 15px; margin-bottom: 16px; }
+.panel {
+  background: #1c293c;
+  padding: 18px;
+  border-radius: 15px;
+  margin-bottom: 16px;
+}
 label { display: block; margin: 14px 0 7px; }
-input, select, textarea, button { width: 100%; padding: 13px; border-radius: 9px; border: 0; font-size: 16px; font-family: inherit; }
+input, select, textarea, button {
+  width: 100%;
+  padding: 13px;
+  border-radius: 9px;
+  border: 0;
+  font-size: 16px;
+  font-family: inherit;
+}
 input, select, textarea { background: #edf3fa; color: #111827; }
 textarea { height: 120px; resize: vertical; }
 video { width: 100%; margin-top: 14px; border-radius: 10px; background: black; }
-button { background: #16a8e0; color: white; font-weight: bold; margin-top: 15px; cursor: pointer; }
+button {
+  background: #16a8e0;
+  color: white;
+  font-weight: bold;
+  margin-top: 15px;
+  cursor: pointer;
+}
 button.secondary { background: #2f4562; margin-top: 8px; }
-button.save { background: #22c55e; }
 button:disabled { background: #64748b; cursor: not-allowed; }
 .status { color: #a8dfff; text-align: center; margin-top: 14px; word-break: break-word; }
 .error-text { color: #ff7b7b; }
 .ok-text { color: #5eead4; }
-.hint { color: #91a1b6; font-size: 13px; text-align: center; margin: 8px 0 0; }
 .progress { height: 10px; background: #0f1a2b; border-radius: 6px; overflow: hidden; margin-top: 14px; }
 .progress > div { height: 100%; width: 0; background: #16a8e0; transition: width .4s; }
-a.dl { display: block; text-align: center; background: #2f4562; color: white; font-weight: bold; padding: 13px; border-radius: 9px; margin-top: 8px; text-decoration: none; }
-.ad { text-align: center; border: 1px dashed #7b8da5; padding: 18px; border-radius: 10px; color: #b8c6d8; }
+a.dl { display: block; text-align: center; background: #22c55e; color: white; font-weight: bold; padding: 13px; border-radius: 9px; margin-top: 12px; text-decoration: none; }
+.ad {
+  text-align: center;
+  border: 1px dashed #7b8da5;
+  padding: 18px;
+  border-radius: 10px;
+  color: #b8c6d8;
+}
 footer { text-align: center; color: #91a1b6; font-size: 13px; margin-top: 25px; }
 </style>
 </head>
@@ -79,10 +101,8 @@ footer { text-align: center; color: #91a1b6; font-size: 13px; margin-top: 25px; 
   <button id="translateButton">▶ ဘာသာပြန်စတင်မည်</button>
   <p class="status" id="status">Video ရွေးချယ်ရန် အသင့်ဖြစ်ပါပြီ။</p>
   <div class="progress" id="progressWrap" hidden><div id="progressBar"></div></div>
-  <video id="resultVideo" controls playsinline webkit-playsinline preload="metadata" hidden></video>
-  <button id="downloadButton" class="save" hidden>⬇ ဗီဒီယို သိမ်းမည်</button>
-  <a id="downloadLink" class="dl" hidden>Link ဖြင့် ဒေါင်းလုဒ်လုပ်မည်</a>
-  <p id="saveHint" class="hint" hidden></p>
+  <video id="resultVideo" controls playsinline hidden></video>
+  <a id="downloadLink" class="dl" hidden>⬇ MP4 ဒေါင်းလုဒ်လုပ်မည်</a>
 </div>
 
 <!-- TEXT -->
@@ -132,10 +152,6 @@ const SERVER_URL = "https://soe-ai-translator-app.onrender.com";
 
 /* ---------- helpers ---------- */
 const $ = (id) => document.getElementById(id);
-const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-
-const isAndroid = /Android/i.test(navigator.userAgent);
 
 function setStatus(el, text, type) {
   el.textContent = text;
@@ -149,7 +165,7 @@ function fetchWithTimeout(url, options = {}, ms = 20000) {
     .finally(() => clearTimeout(timer));
 }
 
-/* ---------- server health ---------- */
+/* ---------- server health (Render free plan အိပ်နေရင် နိုးအောင် ခေါ်) ---------- */
 async function checkServerHealth() {
   const el = $("serverStatus");
   setStatus(el, "AI Server နိုးနေပါသည်... (စက္ကန့် ၆၀ လောက် ကြာနိုင်သည်)");
@@ -187,8 +203,6 @@ const progressWrap = $("progressWrap");
 const progressBar = $("progressBar");
 const resultVideo = $("resultVideo");
 const downloadLink = $("downloadLink");
-const downloadButton = $("downloadButton");
-const saveHint = $("saveHint");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function uploadVideo(formData) {
@@ -215,92 +229,6 @@ function uploadVideo(formData) {
   });
 }
 
-/* ---------- ရလဒ်ကို iPhone အတွက် ပြင်ဆင်ခြင်း ----------
-   ဗီဒီယိုကို ဖုန်းထဲ blob အဖြစ် အရင်ဆွဲယူပြီး
-   - player က blob ကို တိုက်ရိုက်ဖွင့် (Safari က server Range request မလိုတော့)
-   - "သိမ်းမည်" က Share sheet (Save Video) ကို ဖွင့်ပေး */
-let resultBlobUrl = null;
-let resultFile = null;
-
-async function prepareResult(url) {
-  if (resultBlobUrl) URL.revokeObjectURL(resultBlobUrl);
-  resultBlobUrl = null;
-  resultFile = null;
-  saveHint.hidden = true;
-
-  try {
-    setStatus(statusText, "ဗီဒီယိုကို ဖုန်းထဲ ဆွဲယူနေပါသည်...");
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("Download Error (" + res.status + ")");
-    const blob = new Blob([await res.blob()], { type: "video/mp4" });
-    if (!blob.size) throw new Error("ဗီဒီယိုဖိုင် ဗလာဖြစ်နေပါသည်။");
-
-    resultBlobUrl = URL.createObjectURL(blob);
-    resultFile = new File([blob], "soe-translated.mp4", { type: "video/mp4" });
-    resultVideo.src = resultBlobUrl;
-    resultVideo.hidden = false;
-    downloadButton.hidden = false;
-    downloadLink.hidden = true;
-    saveHint.textContent = isIOS
-      ? "iPhone: 'သိမ်းမည်' ကိုနှိပ်ပြီး ပေါ်လာသော menu မှ 'Save Video' ကို ရွေးပါ။"
-      : isAndroid
-        ? "Android: 'သိမ်းမည်' ကိုနှိပ်ရင် ဖုန်းရဲ့ Downloads ထဲ သိမ်းပါမယ်။ Files သို့မဟုတ် Gallery မှာ ရှာပါ။"
-        : "";
-    saveHint.hidden = !(isIOS || isAndroid);
-  } catch (e) {
-    // blob မရလျှင် (memory မလောက် စသည်) server link ကို အစားထိုးသုံး
-    resultVideo.src = url + "?inline=1";
-    resultVideo.hidden = false;
-    downloadButton.hidden = true;
-    downloadLink.href = url;
-    downloadLink.hidden = false;
-    saveHint.textContent = "ဗီဒီယိုကို ကြာကြာနှိပ်ပြီး Save လုပ်နိုင်ပါသည်။";
-    saveHint.hidden = false;
-  }
-}
-
-function directDownload() {
-  const a = document.createElement("a");
-  a.href = resultBlobUrl;
-  a.download = "soe-translated.mp4";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
-async function shareFile() {
-  if (navigator.canShare && navigator.canShare({ files: [resultFile] })) {
-    try {
-      await navigator.share({ files: [resultFile], title: "SOE AI TRANSLATOR" });
-      return true;
-    } catch (e) {
-      if (e && e.name === "AbortError") return true; // user ပယ်ဖျက်
-    }
-  }
-  return false;
-}
-
-downloadButton.addEventListener("click", async function () {
-  if (!resultFile) return;
-
-  if (isIOS) {
-    // iPhone: Share sheet ဖြင့် Photos ထဲသိမ်း (Save Video)
-    if (await shareFile()) return;
-    directDownload();
-    saveHint.textContent = "မသိမ်းနိုင်ပါက အပေါ်က ဗီဒီယိုကို ကြာကြာနှိပ်ပြီး Save/Share ကို ရွေးပါ။";
-    saveHint.hidden = false;
-  } else {
-    // Android / Desktop: Downloads ထဲ တိုက်ရိုက်သိမ်း၊ မရမှ Share
-    directDownload();
-    setStatus(statusText, "ဒေါင်းလုဒ်စတင်ပါပြီ။ Downloads ထဲ ကြည့်ပါ။", "ok");
-    if (isAndroid) {
-      setTimeout(function () {
-        saveHint.textContent = "မသိမ်းဖြစ်ပါက ဗီဒီယိုကို ကြာကြာနှိပ်ပြီး 'Download video' ကို ရွေးပါ။";
-      }, 2500);
-    }
-  }
-});
-
 translateButton.addEventListener("click", async function () {
   const file = videoFile.files[0];
   if (!file) {
@@ -320,9 +248,7 @@ translateButton.addEventListener("click", async function () {
 
   translateButton.disabled = true;
   resultVideo.hidden = true;
-  downloadButton.hidden = true;
   downloadLink.hidden = true;
-  saveHint.hidden = true;
   progressWrap.hidden = false;
   progressBar.style.width = "2%";
   setStatus(statusText, "Server သို့ Video ပို့နေပါသည်...");
@@ -349,8 +275,12 @@ translateButton.addEventListener("click", async function () {
 
       if (job.status === "error") throw new Error(job.error || "ဘာသာပြန်မအောင်မြင်ပါ။");
       if (job.status === "done") {
+        const url = SERVER_URL + "/api/download/" + jobId;
+        resultVideo.src = url + "?inline=1";
+        resultVideo.hidden = false;
+        downloadLink.href = url;
+        downloadLink.hidden = false;
         progressBar.style.width = "100%";
-        await prepareResult(SERVER_URL + "/api/download/" + jobId);
         setStatus(statusText, job.message || "ပြီးစီးပါပြီ။", "ok");
         break;
       }
@@ -364,8 +294,8 @@ translateButton.addEventListener("click", async function () {
   }
 });
 
-/* ---------- TEXT TRANSLATE ---------- */
-const MAX_CHUNK = 450;
+/* ---------- TEXT TRANSLATE (MyMemory - server မလို) ---------- */
+const MAX_CHUNK = 450; // MyMemory limit ~500 bytes per request
 
 function splitIntoChunks(text) {
   const pieces = text.match(/[^.!?。！？။\n]+[.!?。！？။\n]*/g) || [text];
@@ -431,6 +361,7 @@ textTranslateButton.addEventListener("click", async function () {
   setStatus(textStatus, "AI ဘာသာပြန်နေပါသည်...");
 
   try {
+    // 1) Gemini AI (server) ကို အရင်စမ်း
     try {
       const res = await fetchWithTimeout(SERVER_URL + "/api/text-translate", {
         method: "POST",
@@ -445,6 +376,7 @@ textTranslateButton.addEventListener("click", async function () {
       }
     } catch (e) { /* server မရရင် အောက်က အခမဲ့စနစ်သို့ */ }
 
+    // 2) မရရင် MyMemory ဖြင့် ဆက်ပြန်
     setStatus(textStatus, "AI Server မရသဖြင့် အခြားစနစ်ဖြင့် ဘာသာပြန်နေပါသည်...");
     const chunks = splitIntoChunks(inputText);
     const results = [];
