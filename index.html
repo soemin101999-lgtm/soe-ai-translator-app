@@ -14,16 +14,10 @@ body {
   padding: 18px;
   background: #101827;
   color: white;
-  font-family: Arial, sans-serif;
+  font-family: Arial, "Noto Sans Myanmar", "Myanmar Text", sans-serif;
 }
-.container {
-  max-width: 600px;
-  margin: auto;
-}
-header {
-  text-align: center;
-  padding: 20px 5px;
-}
+.container { max-width: 600px; margin: auto; }
+header { text-align: center; padding: 20px 5px; }
 h1 { color: #35c9ff; margin-bottom: 6px; }
 .panel {
   background: #1c293c;
@@ -31,31 +25,18 @@ h1 { color: #35c9ff; margin-bottom: 6px; }
   border-radius: 15px;
   margin-bottom: 16px;
 }
-label {
-  display: block;
-  margin: 14px 0 7px;
-}
+label { display: block; margin: 14px 0 7px; }
 input, select, textarea, button {
   width: 100%;
   padding: 13px;
   border-radius: 9px;
   border: 0;
   font-size: 16px;
+  font-family: inherit;
 }
-input, select, textarea {
-  background: #edf3fa;
-  color: #111827;
-}
-textarea {
-  height: 120px;
-  resize: vertical;
-}
-video {
-  width: 100%;
-  margin-top: 14px;
-  border-radius: 10px;
-  background: black;
-}
+input, select, textarea { background: #edf3fa; color: #111827; }
+textarea { height: 120px; resize: vertical; }
+video { width: 100%; margin-top: 14px; border-radius: 10px; background: black; }
 button {
   background: #16a8e0;
   color: white;
@@ -63,22 +44,11 @@ button {
   margin-top: 15px;
   cursor: pointer;
 }
-button:disabled {
-  background: #64748b;
-  cursor: not-allowed;
-}
-.status {
-  color: #a8dfff;
-  text-align: center;
-  margin-top: 14px;
-  word-break: break-word;
-}
-.error-text {
-  color: #ff7b7b;
-}
-.ok-text {
-  color: #5eead4;
-}
+button.secondary { background: #2f4562; margin-top: 8px; }
+button:disabled { background: #64748b; cursor: not-allowed; }
+.status { color: #a8dfff; text-align: center; margin-top: 14px; word-break: break-word; }
+.error-text { color: #ff7b7b; }
+.ok-text { color: #5eead4; }
 .ad {
   text-align: center;
   border: 1px dashed #7b8da5;
@@ -86,12 +56,7 @@ button:disabled {
   border-radius: 10px;
   color: #b8c6d8;
 }
-footer {
-  text-align: center;
-  color: #91a1b6;
-  font-size: 13px;
-  margin-top: 25px;
-}
+footer { text-align: center; color: #91a1b6; font-size: 13px; margin-top: 25px; }
 </style>
 </head>
 
@@ -100,15 +65,16 @@ footer {
 
 <header>
   <h1>SOE AI TRANSLATOR</h1>
-  <p>AI Video & Text Translation to Myanmar Language</p>
+  <p>AI Video &amp; Text Translation to Myanmar Language</p>
 </header>
 
+<!-- VIDEO -->
 <div class="panel">
   <h3>🎬 Video ရွေးချယ်ပါ</h3>
   <input type="file" id="videoFile" accept="video/*">
   <video id="videoPreview" controls playsinline hidden></video>
 
-  <label>မူရင်းဘာသာစကား</label>
+  <label for="sourceLanguage">မူရင်းဘာသာစကား</label>
   <select id="sourceLanguage">
     <option value="en">English</option>
     <option value="zh">Chinese</option>
@@ -116,43 +82,45 @@ footer {
     <option value="auto">Auto Detect</option>
   </select>
 
-  <label>ပြန်ဆိုမည့်ဘာသာစကား</label>
+  <label for="targetLanguage">ပြန်ဆိုမည့်ဘာသာစကား</label>
   <select id="targetLanguage">
     <option value="my">Myanmar (မြန်မာ)</option>
   </select>
 
-  <label>အသံရွေးချယ်ပါ</label>
+  <label for="voice">အသံရွေးချယ်ပါ</label>
   <select id="voice">
     <option value="male">မြန်မာအမျိုးသားအသံ</option>
   </select>
 
   <button id="translateButton">▶ ဘာသာပြန်စတင်မည်</button>
-
   <p class="status" id="status">Video ရွေးချယ်ရန် အသင့်ဖြစ်ပါပြီ။</p>
 </div>
 
+<!-- TEXT -->
 <div class="panel">
   <h3>🌐 AI စာသားဘာသာပြန်စနစ်</h3>
 
-  <label>မူရင်းဘာသာစကား</label>
+  <label for="textSourceLanguage">မူရင်းဘာသာစကား</label>
   <select id="textSourceLanguage">
     <option value="en">English</option>
-    <option value="zh">Chinese</option>
+    <option value="zh-CN">Chinese</option>
     <option value="th">Thai</option>
     <option value="auto">Auto Detect</option>
   </select>
 
-  <label>ဘာသာပြန်မည့်စာသား</label>
+  <label for="inputText">ဘာသာပြန်မည့်စာသား</label>
   <textarea id="inputText" placeholder="ဘာသာပြန်မည့်စာသားကို ဒီမှာထည့်ပါ..."></textarea>
 
   <button id="textTranslateButton">မြန်မာဘာသာပြန်မည်</button>
 
-  <label>မြန်မာဘာသာပြန်ရလဒ်</label>
+  <label for="translatedText">မြန်မာဘာသာပြန်ရလဒ်</label>
   <textarea id="translatedText" readonly placeholder="ဘာသာပြန်ရလဒ် ဒီမှာပေါ်လာပါမည်..."></textarea>
+  <button id="copyButton" class="secondary">📋 ကူးယူမည်</button>
 
   <p id="textStatus" class="status"></p>
 </div>
 
+<!-- AUDIO INFO -->
 <div class="panel">
   <h3>🎵 အသံစနစ်</h3>
   <p>မူရင်းစကားပြောသံကို မြန်မာအသံဖြင့် အစားထိုးရန်</p>
@@ -166,153 +134,220 @@ footer {
   <p>ကြော်ငြာနေရာ (နမူနာသာ)</p>
 </div>
 
-<footer>
-  © 2026 SOE AI TRANSLATOR
-</footer>
+<footer>© 2026 SOE AI TRANSLATOR</footer>
 
 </div>
 
 <script>
 const SERVER_URL = "https://soe-ai-translator-app.onrender.com";
 
-const videoFile = document.getElementById("videoFile");
-const videoPreview = document.getElementById("videoPreview");
-const statusText = document.getElementById("status");
-const translateButton = document.getElementById("translateButton");
-const serverStatus = document.getElementById("serverStatus");
+/* ---------- helpers ---------- */
+const $ = (id) => document.getElementById(id);
 
-let currentVideoURL = null;
+function setStatus(el, text, type) {
+  el.textContent = text;
+  el.className = "status" + (type === "ok" ? " ok-text" : type === "error" ? " error-text" : "");
+}
 
-// Server ချိတ်ဆက်မှု အခြေအနေ စစ်ဆေးခြင်း
+function fetchWithTimeout(url, options = {}, ms = 20000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timer));
+}
+
+/* ---------- server health (Render free plan အိပ်နေရင် နိုးအောင် ခေါ်) ---------- */
 async function checkServerHealth() {
+  const el = $("serverStatus");
+  setStatus(el, "AI Server နိုးနေပါသည်... (စက္ကန့် ၆၀ လောက် ကြာနိုင်သည်)");
   try {
-    const res = await fetch(SERVER_URL + "/health");
+    const res = await fetchWithTimeout(SERVER_URL + "/health", {}, 60000);
     if (res.ok) {
-      serverStatus.textContent = "AI Server ချိတ်ဆက်မှု အဆင်ပြေပါသည်။";
-      serverStatus.className = "status ok-text";
+      setStatus(el, "AI Server ချိတ်ဆက်မှု အဆင်ပြေပါသည်။", "ok");
     } else {
-      serverStatus.textContent = "AI Server ကို စစ်ဆေးရန် လိုအပ်ပါသည်။ (Status: " + res.status + ")";
-      serverStatus.className = "status error-text";
+      setStatus(el, "AI Server ကို စစ်ဆေးရန် လိုအပ်ပါသည်။ (Status: " + res.status + ")", "error");
     }
   } catch (err) {
-    serverStatus.textContent = "AI Server ချိတ်ဆက်ရန် လိုအပ်ပါသည်။ (Server နိုးနေမနေ စစ်ပါ)";
-    serverStatus.className = "status error-text";
+    setStatus(el, "AI Server ချိတ်ဆက်၍ မရပါ။ (Server ပိတ်နေ / URL မှား / CORS ပြဿနာ ဖြစ်နိုင်သည်)", "error");
   }
 }
 checkServerHealth();
 
+/* ---------- VIDEO ---------- */
+const videoFile = $("videoFile");
+const videoPreview = $("videoPreview");
+const statusText = $("status");
+const translateButton = $("translateButton");
+let currentVideoURL = null;
+
 videoFile.addEventListener("change", function () {
   const file = this.files[0];
   if (!file) return;
-
-  if (currentVideoURL) {
-    URL.revokeObjectURL(currentVideoURL);
-  }
-
+  if (currentVideoURL) URL.revokeObjectURL(currentVideoURL);
   currentVideoURL = URL.createObjectURL(file);
   videoPreview.src = currentVideoURL;
   videoPreview.hidden = false;
-
-  statusText.textContent = "Video ရွေးချယ်ပြီးပါပြီ။";
-  statusText.className = "status";
+  setStatus(statusText, "Video ရွေးချယ်ပြီးပါပြီ။");
 });
 
 translateButton.addEventListener("click", async function () {
   const file = videoFile.files[0];
   if (!file) {
-    statusText.textContent = "အရင်ဆုံး Video ရွေးချယ်ပါ။";
-    statusText.className = "status error-text";
+    setStatus(statusText, "အရင်ဆုံး Video ရွေးချယ်ပါ။", "error");
     return;
   }
 
   const formData = new FormData();
   formData.append("video", file);
-  formData.append("sourceLanguage", document.getElementById("sourceLanguage").value);
-  formData.append("targetLanguage", document.getElementById("targetLanguage").value);
-  formData.append("voice", document.getElementById("voice").value);
+  formData.append("sourceLanguage", $("sourceLanguage").value);
+  formData.append("targetLanguage", $("targetLanguage").value);
+  formData.append("voice", $("voice").value);
 
   translateButton.disabled = true;
-  statusText.textContent = "Server သို့ Video ပို့နေပါသည်...";
-  statusText.className = "status";
+  setStatus(statusText, "Server သို့ Video ပို့နေပါသည်...");
 
   try {
-    const response = await fetch(SERVER_URL + "/api/translate", {
-      method: "POST",
-      body: formData
-    });
-
+    const response = await fetchWithTimeout(
+      SERVER_URL + "/api/translate",
+      { method: "POST", body: formData },
+      10 * 60 * 1000
+    );
     const result = await response.json().catch(() => ({}));
 
     if (response.status === 501) {
-      statusText.textContent = result.message || "Video ကို Server က လက်ခံပါပြီ။ AI Video ဘာသာပြန်စနစ် မချိတ်ဆက်ရသေးပါ။";
-      statusText.className = "status";
+      setStatus(statusText, result.message || "Video ကို Server က လက်ခံပါပြီ။ AI Video ဘာသာပြန်စနစ် မချိတ်ဆက်ရသေးပါ။");
     } else if (!response.ok) {
       throw new Error(result.error || "Server Error (" + response.status + ")");
     } else {
-      statusText.textContent = result.message || "ပြီးစီးပါပြီ။";
-      statusText.className = "status ok-text";
+      setStatus(statusText, result.message || "ပြီးစီးပါပြီ။", "ok");
     }
   } catch (error) {
-    statusText.textContent = "Server ချိတ်ဆက်မှု မအောင်မြင်ပါ။ " + error.message;
-    statusText.className = "status error-text";
+    const msg = error.name === "AbortError" ? "အချိန်ကြာလွန်းသွားပါသည်။" : error.message;
+    setStatus(statusText, "Server ချိတ်ဆက်မှု မအောင်မြင်ပါ။ " + msg, "error");
   } finally {
     translateButton.disabled = false;
   }
 });
 
-const textTranslateButton = document.getElementById("textTranslateButton");
+/* ---------- TEXT TRANSLATE (MyMemory - server မလို) ---------- */
+const MAX_CHUNK = 450; // MyMemory limit ~500 bytes per request
+
+function splitIntoChunks(text) {
+  const pieces = text.match(/[^.!?。！？။\n]+[.!?。！？။\n]*/g) || [text];
+  const chunks = [];
+  let current = "";
+
+  for (let piece of pieces) {
+    while (piece.length > MAX_CHUNK) {
+      if (current) { chunks.push(current); current = ""; }
+      chunks.push(piece.slice(0, MAX_CHUNK));
+      piece = piece.slice(MAX_CHUNK);
+    }
+    if ((current + piece).length > MAX_CHUNK) {
+      if (current) chunks.push(current);
+      current = piece;
+    } else {
+      current += piece;
+    }
+  }
+  if (current.trim()) chunks.push(current);
+  return chunks.map((c) => c.trim()).filter(Boolean);
+}
+
+async function translateChunk(chunk, source) {
+  const from = source === "auto" ? "Autodetect" : source;
+  const url = "https://api.mymemory.translated.net/get?q=" +
+    encodeURIComponent(chunk) + "&langpair=" + encodeURIComponent(from + "|my");
+
+  const response = await fetchWithTimeout(url, {}, 20000);
+  if (!response.ok) throw new Error("Status " + response.status);
+
+  const data = await response.json();
+  const translated = data.responseData && data.responseData.translatedText;
+
+  if (data.responseStatus && Number(data.responseStatus) !== 200) {
+    throw new Error(data.responseDetails || "Translation service error");
+  }
+  if (!translated || /MYMEMORY WARNING/i.test(translated)) {
+    throw new Error("ယနေ့အတွက် အခမဲ့ ဘာသာပြန်ကန့်သတ်ချက် ပြည့်သွားပါပြီ။ နောက်မှ ပြန်စမ်းပါ။");
+  }
+  return translated;
+}
+
+const textTranslateButton = $("textTranslateButton");
 
 textTranslateButton.addEventListener("click", async function () {
-  const inputText = document.getElementById("inputText").value.trim();
-  const sourceLanguage = document.getElementById("textSourceLanguage").value;
-  const output = document.getElementById("translatedText");
-  const textStatus = document.getElementById("textStatus");
+  const inputText = $("inputText").value.trim();
+  const sourceLanguage = $("textSourceLanguage").value;
+  const output = $("translatedText");
+  const textStatus = $("textStatus");
 
   if (!inputText) {
-    textStatus.textContent = "ဘာသာပြန်မည့်စာသား ထည့်ပါ။";
-    textStatus.className = "status error-text";
+    setStatus(textStatus, "ဘာသာပြန်မည့်စာသား ထည့်ပါ။", "error");
+    return;
+  }
+  if (inputText.length > 5000) {
+    setStatus(textStatus, "စာသား အရှည်လွန်းပါသည်။ ၅၀၀၀ လုံးအောက် ထည့်ပါ။", "error");
     return;
   }
 
   textTranslateButton.disabled = true;
-  textStatus.textContent = "AI ဘာသာပြန်နေပါသည်...";
-  textStatus.className = "status";
   output.value = "";
+  setStatus(textStatus, "AI ဘာသာပြန်နေပါသည်...");
 
   try {
-    const response = await fetch(SERVER_URL + "/api/text-translate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        text: inputText,
-        sourceLanguage: sourceLanguage
-      })
-    });
+    // 1) Gemini AI (server) ကို အရင်စမ်း
+    try {
+      const res = await fetchWithTimeout(SERVER_URL + "/api/text-translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: inputText, sourceLanguage })
+      }, 60000);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.translatedText) {
+        output.value = data.translatedText;
+        setStatus(textStatus, "ဘာသာပြန်ပြီးပါပြီ။ (Gemini AI)", "ok");
+        return;
+      }
+    } catch (e) { /* server မရရင် အောက်က အခမဲ့စနစ်သို့ */ }
 
-    const result = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(result.error || "ဘာသာပြန်မအောင်မြင်ပါ။ (Status: " + response.status + ")");
+    // 2) မရရင် MyMemory ဖြင့် ဆက်ပြန်
+    setStatus(textStatus, "AI Server မရသဖြင့် အခြားစနစ်ဖြင့် ဘာသာပြန်နေပါသည်...");
+    const chunks = splitIntoChunks(inputText);
+    const results = [];
+    for (let i = 0; i < chunks.length; i++) {
+      if (chunks.length > 1) {
+        setStatus(textStatus, "ဘာသာပြန်နေပါသည်... (" + (i + 1) + "/" + chunks.length + ")");
+      }
+      results.push(await translateChunk(chunks[i], sourceLanguage));
+      output.value = results.join(" ");
     }
-
-    const translated = result.translatedText ?? result.translation ?? "";
-    if (!translated) {
-      throw new Error("Server မှ ဘာသာပြန်စာသား ပြန်မလာပါ။");
-    }
-
-    output.value = translated;
-    textStatus.textContent = "ဘာသာပြန်ပြီးပါပြီ။";
-    textStatus.className = "status ok-text";
+    setStatus(textStatus, "ဘာသာပြန်ပြီးပါပြီ။", "ok");
   } catch (error) {
-    textStatus.textContent = "Error: " + error.message;
-    textStatus.className = "status error-text";
+    const msg = error.name === "AbortError" ? "အချိန်ကြာလွန်းသွားပါသည်။ ပြန်စမ်းပါ။" : error.message;
+    setStatus(textStatus, "Error: " + msg, "error");
   } finally {
     textTranslateButton.disabled = false;
   }
 });
 
+$("copyButton").addEventListener("click", async function () {
+  const value = $("translatedText").value;
+  const textStatus = $("textStatus");
+  if (!value) {
+    setStatus(textStatus, "ကူးယူရန် ရလဒ် မရှိသေးပါ။", "error");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(value);
+    setStatus(textStatus, "ကူးယူပြီးပါပြီ။", "ok");
+  } catch (e) {
+    $("translatedText").select();
+    setStatus(textStatus, "စာသားကို ရွေးပေးထားပါသည်၊ ကိုယ်တိုင် ကူးယူပါ။");
+  }
+});
+
+/* ---------- service worker ---------- */
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", function () {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
