@@ -25,12 +25,14 @@ const TEXT_MODELS = [
   "gemini-3.8-flash",
   "gemini-3.7-flash",
   "gemini-3.6-flash",
+  "gemini-3.5-flash",
   "gemini-2.5-flash"
 ].filter(Boolean);
 
 const TTS_MODELS = [
   process.env.GEMINI_TTS_MODEL,
   "gemini-3.8-flash-tts",
+  "gemini-3.8-flash-lite-tts",
   "gemini-3.1-flash-tts-preview",
   "gemini-2.5-flash-preview-tts"
 ].filter(Boolean);
@@ -42,6 +44,16 @@ const TTS_SAMPLE_RATE = 24000;
 const MAX_TEMPO = 2.0;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Google error က JSON ပါလာတတ်လို့ အဓိကစာကိုပဲ ဆွဲထုတ်
+function shortError(err, max = 160) {
+  let msg = String(err?.message || err || "");
+  try {
+    const j = JSON.parse(msg);
+    if (j?.error?.message) msg = `${j.error.code || ""} ${j.error.message}`.trim();
+  } catch (e) { /* JSON မဟုတ် */ }
+  return msg.replace(/\s+/g, " ").slice(0, max);
+}
 
 /* ---------------- basic routes ---------------- */
 app.get("/", (req, res) => {
@@ -62,12 +74,9 @@ function languageLabel(code = "auto") {
 
 let workingTextModel = null;
 async function generateText(contents) {
-  const order = [workingTextModel, ...TEXT_MODELS].filter(Boolean);
-  const tried = new Set();
-  let lastError;
+  const order = [...new Set([workingTextModel, ...TEXT_MODELS].filter(Boolean))];
+  const errors = [];
   for (const model of order) {
-    if (tried.has(model)) continue;
-    tried.add(model);
     try {
       const response = await ai.models.generateContent({ model, contents });
       const text = (response.text || "").trim();
@@ -75,13 +84,13 @@ async function generateText(contents) {
         workingTextModel = model;
         return text;
       }
-      lastError = new Error("Gemini မှ ရလဒ်အလွတ် ပြန်လာပါသည်။");
+      errors.push(`${model}: ရလဒ်အလွတ်`);
     } catch (err) {
       console.error(`Model ${model} failed:`, err.message);
-      lastError = err;
+      errors.push(`${model}: ${shortError(err)}`);
     }
   }
-  throw lastError || new Error("Gemini model မရပါ။");
+  throw new Error("Gemini မအောင်မြင်ပါ။ " + (errors.join(" | ") || "model မရပါ။"));
 }
 
 // WAV (RIFF) ဖြစ်ရင် header ဖယ်ပြီး raw PCM ယူ၊ မဟုတ်ရင် PCM အတိုင်းသုံး
@@ -105,12 +114,9 @@ function decodeAudio(buf, mime = "") {
 
 let workingTtsModel = null;
 async function ttsChunk(text, voiceName) {
-  const order = [workingTtsModel, ...TTS_MODELS].filter(Boolean);
-  const tried = new Set();
-  let lastError;
+  const order = [...new Set([workingTtsModel, ...TTS_MODELS].filter(Boolean))];
+  const errors = [];
   for (const model of order) {
-    if (tried.has(model)) continue;
-    tried.add(model);
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const response = await ai.models.generateContent({
@@ -130,12 +136,12 @@ async function ttsChunk(text, voiceName) {
         return decodeAudio(Buffer.from(part.inlineData.data, "base64"), part.inlineData.mimeType || "");
       } catch (err) {
         console.error(`TTS ${model} attempt ${attempt + 1} failed:`, err.message);
-        lastError = err;
+        if (attempt === 1) errors.push(`${model}: ${shortError(err)}`);
         await sleep(2000);
       }
     }
   }
-  throw lastError || new Error("TTS model မရပါ။");
+  throw new Error("TTS မအောင်မြင်ပါ။ " + (errors.join(" | ") || "model မရပါ။"));
 }
 
 function splitForTts(text, max = 600) {
@@ -160,6 +166,18 @@ function splitForTts(text, max = 600) {
   if (current.trim()) chunks.push(current.trim());
   return chunks;
 }
+
+/* ---------------- diagnostic: Gemini ချိတ်ဆက်မှု စစ်ရန် ----------------
+   Browser မှာ  https://soe-ai-translator-app.onrender.com/api/test-gemini  ကို ဖွင့်ကြည့်ပါ */
+app.get("/api/test-gemini", async (req, res) => {
+  if (!ai) return res.status(500).json({ ok: false, error: "GEMINI_API_KEY မရှိပါ။" });
+  try {
+    const text = await generateText("Reply with the single word: OK");
+    res.json({ ok: true, textModel: workingTextModel, reply: text.slice(0, 40) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 /* ---------------- text translate ---------------- */
 app.post("/api/text-translate", async (req, res) => {
@@ -402,6 +420,7 @@ app.get("/api/download/:id", (req, res) => {
   if (!job || job.status !== "done" || !job.outPath || !fs.existsSync(job.outPath)) {
     return res.status(404).json({ error: "ဖိုင်ကို မတွေ့ပါ။" });
   }
+  // sendFile က Range request (iPhone Safari အတွက် လိုအပ်) ကို အလိုအလျောက် ကိုင်တွယ်
   if (req.query.inline) {
     return res.type("video/mp4").sendFile(job.outPath);
   }
