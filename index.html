@@ -20,6 +20,19 @@
   .container { max-width: 600px; margin: auto; }
   header { text-align: center; padding: 20px 5px; }
   h1 { color: #35c9ff; margin-bottom: 6px; }
+  .install-btn {
+    background: #22c55e;
+    color: white;
+    font-weight: bold;
+    padding: 11px 16px;
+    border-radius: 9px;
+    border: 0;
+    font-size: 15px;
+    margin-top: 10px;
+    cursor: pointer;
+    width: auto;
+    display: inline-block;
+  }
   .panel {
     background: #1c293c;
     padding: 18px;
@@ -76,6 +89,8 @@
 <header>
   <h1>SOE AI TRANSLATOR</h1>
   <p>AI Video &amp; Text Translation to Myanmar Language</p>
+  <button id="installAppBtn" class="install-btn">📲 App ထည့်သွင်းမည်</button>
+  <p class="status" id="installHint" style="margin-top: 8px; font-size: 13px;"></p>
 </header>
 
 <!-- VIDEO -->
@@ -163,6 +178,40 @@
 
 <script>
 const SERVER_URL = "https://soe-ai-translator-app.onrender.com";
+
+/* ---------- PWA Install Button ---------- */
+let deferredPrompt = null;
+const installAppBtn = document.getElementById("installAppBtn");
+const installHint = document.getElementById("installHint");
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installHint.textContent = "ခလုတ်နှိပ်ပြီး ဖုန်း Screen ပေါ် App အဖြစ် ထည့်သွင်းနိုင်ပါသည်။";
+});
+
+installAppBtn.addEventListener("click", async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const choice = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    if (choice.outcome === "accepted") {
+      installHint.textContent = "App ထည့်သွင်းပြီးပါပြီ။";
+    }
+  } else {
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    if (isIOS) {
+      installHint.textContent = "iPhone တွင် Share (□↑) ခလုတ်ကိုနှိပ်ပြီး 'Add to Home Screen' ကို ရွေးပါ။";
+    } else {
+      installHint.textContent = "Browser Menu (⋮) ကိုနှိပ်ပြီး 'Add to Home screen' (သို့) 'Install app' ကို ရွေးပါ။";
+    }
+  }
+});
+
+window.addEventListener("appinstalled", () => {
+  installHint.textContent = "SOE AI TRANSLATOR App ထည့်သွင်းပြီးပါပြီ။";
+  deferredPrompt = null;
+});
 
 /* ---------- Adsterra Smartlink ---------- */
 const AD_SMARTLINK_URL = "https://directyp.org/4/dd75774dfc8901622cde7a1ba4d427d9";
