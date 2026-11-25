@@ -16,7 +16,8 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
 const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+// TTS model များသည် v1beta လိုအပ်သည်
+const ai = apiKey ? new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "v1beta" } }) : null;
 
 /* ---------------- settings ---------------- */
 const TEXT_MODELS = [
@@ -84,6 +85,25 @@ async function generateText(contents) {
   throw lastError || new Error("Gemini model မရပါ။");
 }
 
+// WAV (RIFF) ဖြစ်ရင် header ဖယ်ပြီး raw PCM ယူ၊ မဟုတ်ရင် PCM အတိုင်းသုံး
+function decodeAudio(buf, mime = "") {
+  let rate = Number((/rate=(\d+)/.exec(mime) || [])[1]) || TTS_SAMPLE_RATE;
+  if (buf.length > 44 && buf.toString("ascii", 0, 4) === "RIFF") {
+    let offset = 12;
+    while (offset + 8 <= buf.length) {
+      const id = buf.toString("ascii", offset, offset + 4);
+      const size = buf.readUInt32LE(offset + 4);
+      if (id === "fmt ") rate = buf.readUInt32LE(offset + 12);
+      if (id === "data") {
+        const end = size === 0xffffffff || offset + 8 + size > buf.length ? buf.length : offset + 8 + size;
+        return { pcm: buf.subarray(offset + 8, end), rate };
+      }
+      offset += 8 + size + (size % 2);
+    }
+  }
+  return { pcm: buf, rate };
+}
+
 let workingTtsModel = null;
 async function ttsChunk(text, voiceName) {
   const order = [workingTtsModel, ...TTS_MODELS].filter(Boolean);
@@ -108,7 +128,7 @@ async function ttsChunk(text, voiceName) {
         const part = parts.find((p) => p.inlineData?.data);
         if (!part) throw new Error("TTS မှ အသံ ပြန်မလာပါ။");
         workingTtsModel = model;
-        return Buffer.from(part.inlineData.data, "base64");
+        return decodeAudio(Buffer.from(part.inlineData.data, "base64"), part.inlineData.mimeType || "");
       } catch (err) {
         console.error(`TTS ${model} attempt ${attempt + 1} failed:`, err.message);
         lastError = err;
@@ -263,15 +283,16 @@ async function processJob(job, file, opts) {
       });
       pcmParts.push(await ttsChunk(chunks[i], voiceName));
     }
-    const pcm = Buffer.concat(pcmParts);
+    const ttsRate = pcmParts[0].rate;
+    const pcm = Buffer.concat(pcmParts.map((x) => x.pcm));
     const pcmPath = path.join(dir, "tts.pcm");
     const ttsWav = path.join(dir, "tts.wav");
     fs.writeFileSync(pcmPath, pcm);
-    await runFfmpeg(["-f", "s16le", "-ar", String(TTS_SAMPLE_RATE), "-ac", "1", "-i", pcmPath, ttsWav]);
+    await runFfmpeg(["-f", "s16le", "-ar", String(ttsRate), "-ac", "1", "-i", pcmPath, ttsWav]);
 
     // 4) အသံနဲ့ ဗီဒီယိုကို ပေါင်း
     setJob(job, { progress: 85, message: "အသံအသစ်ကို ဗီဒီယိုနဲ့ ပေါင်းနေပါသည်..." });
-    const ttsDuration = pcm.length / (TTS_SAMPLE_RATE * 2);
+    const ttsDuration = pcm.length / (ttsRate * 2);
     let tempo = ttsDuration / info.duration;
     let note = "";
     let ttsFilter = "anull";
