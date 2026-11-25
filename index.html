@@ -2,85 +2,67 @@
 <html lang="my">
 <head>
   <meta name="monetag" content="...">
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#101827">
-  <link rel="manifest" href="./manifest.json">
-  <title>SOE AI TRANSLATOR</title>
+</head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#101827">
+<link rel="manifest" href="./manifest.json">
+<title>SOE AI TRANSLATOR</title>
 
-  <style>
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    padding: 18px;
-    background: #101827;
-    color: white;
-    font-family: Arial, "Noto Sans Myanmar", "Myanmar Text", sans-serif;
-  }
-  .container { max-width: 600px; margin: auto; }
-  header { text-align: center; padding: 20px 5px; }
-  h1 { color: #35c9ff; margin-bottom: 6px; }
-  .install-btn {
-    background: #22c55e;
-    color: white;
-    font-weight: bold;
-    padding: 11px 16px;
-    border-radius: 9px;
-    border: 0;
-    font-size: 15px;
-    margin-top: 10px;
-    cursor: pointer;
-    width: auto;
-    display: inline-block;
-  }
-  .panel {
-    background: #1c293c;
-    padding: 18px;
-    border-radius: 15px;
-    margin-bottom: 16px;
-  }
-  label { display: block; margin: 14px 0 7px; }
-  input, select, textarea, button {
-    width: 100%;
-    padding: 13px;
-    border-radius: 9px;
-    border: 0;
-    font-size: 16px;
-    font-family: inherit;
-  }
-  input, select, textarea { background: #edf3fa; color: #111827; }
-  textarea { height: 120px; resize: vertical; }
-  video { width: 100%; margin-top: 14px; border-radius: 10px; background: black; }
-  button {
-    background: #16a8e0;
-    color: white;
-    font-weight: bold;
-    margin-top: 15px;
-    cursor: pointer;
-  }
-  button.secondary { background: #2f4562; margin-top: 8px; }
-  button:disabled { background: #64748b; cursor: not-allowed; }
-  .status { color: #a8dfff; text-align: center; margin-top: 14px; word-break: break-word; }
-  .error-text { color: #ff7b7b; }
-  .ok-text { color: #5eead4; }
-  .progress { height: 10px; background: #0f1a2b; border-radius: 6px; overflow: hidden; margin-top: 14px; }
-  .progress > div { height: 100%; width: 0; background: #16a8e0; transition: width .4s; }
-  a.dl { display: block; text-align: center; background: #22c55e; color: white; font-weight: bold; padding: 13px; border-radius: 9px; margin-top: 12px; text-decoration: none; }
-  .ad {
-    text-align: center;
-    border: 1px dashed #7b8da5;
-    padding: 12px;
-    border-radius: 10px;
-    color: #b8c6d8;
-    min-height: 260px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-  }
-  footer { text-align: center; color: #91a1b6; font-size: 13px; margin-top: 25px; }
-  </style>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 18px;
+  background: #101827;
+  color: white;
+  font-family: Arial, "Noto Sans Myanmar", "Myanmar Text", sans-serif;
+}
+.container { max-width: 600px; margin: auto; }
+header { text-align: center; padding: 20px 5px; }
+h1 { color: #35c9ff; margin-bottom: 6px; }
+.panel {
+  background: #1c293c;
+  padding: 18px;
+  border-radius: 15px;
+  margin-bottom: 16px;
+}
+label { display: block; margin: 14px 0 7px; }
+input, select, textarea, button {
+  width: 100%;
+  padding: 13px;
+  border-radius: 9px;
+  border: 0;
+  font-size: 16px;
+  font-family: inherit;
+}
+input, select, textarea { background: #edf3fa; color: #111827; }
+textarea { height: 120px; resize: vertical; }
+video { width: 100%; margin-top: 14px; border-radius: 10px; background: black; }
+button {
+  background: #16a8e0;
+  color: white;
+  font-weight: bold;
+  margin-top: 15px;
+  cursor: pointer;
+}
+button.secondary { background: #2f4562; margin-top: 8px; }
+button:disabled { background: #64748b; cursor: not-allowed; }
+.status { color: #a8dfff; text-align: center; margin-top: 14px; word-break: break-word; }
+.error-text { color: #ff7b7b; }
+.ok-text { color: #5eead4; }
+.progress { height: 10px; background: #0f1a2b; border-radius: 6px; overflow: hidden; margin-top: 14px; }
+.progress > div { height: 100%; width: 0; background: #16a8e0; transition: width .4s; }
+a.dl { display: block; text-align: center; background: #22c55e; color: white; font-weight: bold; padding: 13px; border-radius: 9px; margin-top: 12px; text-decoration: none; }
+.ad {
+  text-align: center;
+  border: 1px dashed #7b8da5;
+  padding: 18px;
+  border-radius: 10px;
+  color: #b8c6d8;
+}
+footer { text-align: center; color: #91a1b6; font-size: 13px; margin-top: 25px; }
+</style>
 </head>
 
 <body>
@@ -89,8 +71,6 @@
 <header>
   <h1>SOE AI TRANSLATOR</h1>
   <p>AI Video &amp; Text Translation to Myanmar Language</p>
-  <button id="installAppBtn" class="install-btn">📲 App ထည့်သွင်းမည်</button>
-  <p class="status" id="installHint" style="margin-top: 8px; font-size: 13px;"></p>
 </header>
 
 <!-- VIDEO -->
@@ -158,18 +138,9 @@
   <p class="status" id="serverStatus">AI Server အခြေအနေ စစ်ဆေးနေပါသည်...</p>
 </div>
 
-<!-- ADVERTISEMENT BANNER (300x250) -->
-<div class="ad" id="adBanner">
-  <script type="text/javascript">
-    atOptions = {
-      'key' : '9c00a751d36bb3fd0fab385c7bd6777a',
-      'format' : 'iframe',
-      'height' : 250,
-      'width' : 300,
-      'params' : {}
-    };
-  </script>
-  <script type="text/javascript" src="https://www.highperformanceformat.com/9c00a751d36bb3fd0fab385c7bd6777a/invoke.js"></script>
+<div class="ad">
+  Advertisement Banner
+  <p>ကြော်ငြာနေရာ (နမူနာသာ)</p>
 </div>
 
 <footer>© 2026 SOE AI TRANSLATOR</footer>
@@ -178,56 +149,6 @@
 
 <script>
 const SERVER_URL = "https://soe-ai-translator-app.onrender.com";
-
-/* ---------- PWA Install Button ---------- */
-let deferredPrompt = null;
-const installAppBtn = document.getElementById("installAppBtn");
-const installHint = document.getElementById("installHint");
-
-window.addEventListener("beforeinstallprompt", (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  installHint.textContent = "ခလုတ်နှိပ်ပြီး ဖုန်း Screen ပေါ် App အဖြစ် ထည့်သွင်းနိုင်ပါသည်။";
-});
-
-installAppBtn.addEventListener("click", async () => {
-  if (deferredPrompt) {
-    deferredPrompt.prompt();
-    const choice = await deferredPrompt.userChoice;
-    deferredPrompt = null;
-    if (choice.outcome === "accepted") {
-      installHint.textContent = "App ထည့်သွင်းပြီးပါပြီ။";
-    }
-  } else {
-    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    if (isIOS) {
-      installHint.textContent = "iPhone တွင် Share (□↑) ခလုတ်ကိုနှိပ်ပြီး 'Add to Home Screen' ကို ရွေးပါ။";
-    } else {
-      installHint.textContent = "Browser Menu (⋮) ကိုနှိပ်ပြီး 'Add to Home screen' (သို့) 'Install app' ကို ရွေးပါ။";
-    }
-  }
-});
-
-window.addEventListener("appinstalled", () => {
-  installHint.textContent = "SOE AI TRANSLATOR App ထည့်သွင်းပြီးပါပြီ။";
-  deferredPrompt = null;
-});
-
-/* ---------- Adsterra Smartlink (လိုအပ်ပါက Link အသစ်ဖြင့် အစားထိုးနိုင်သည်) ---------- */
-const AD_SMARTLINK_URL = "https://directyp.org/4/dd75774dfc8901622cde7a1ba4d427d9";
-const AD_COOLDOWN_MS = 3 * 60 * 1000;
-
-function openSmartlinkOnceInWhile() {
-  if (!AD_SMARTLINK_URL) return;
-  try {
-    const last = Number(localStorage.getItem("soe_ad_last") || 0);
-    const now = Date.now();
-    if (now - last > AD_COOLDOWN_MS) {
-      localStorage.setItem("soe_ad_last", String(now));
-      window.open(AD_SMARTLINK_URL, "_blank", "noopener,noreferrer");
-    }
-  } catch (e) {}
-}
 
 /* ---------- helpers ---------- */
 const $ = (id) => document.getElementById(id);
@@ -244,7 +165,7 @@ function fetchWithTimeout(url, options = {}, ms = 20000) {
     .finally(() => clearTimeout(timer));
 }
 
-/* ---------- server health ---------- */
+/* ---------- server health (Render free plan အိပ်နေရင် နိုးအောင် ခေါ်) ---------- */
 async function checkServerHealth() {
   const el = $("serverStatus");
   setStatus(el, "AI Server နိုးနေပါသည်... (စက္ကန့် ၆၀ လောက် ကြာနိုင်သည်)");
@@ -283,10 +204,6 @@ const progressBar = $("progressBar");
 const resultVideo = $("resultVideo");
 const downloadLink = $("downloadLink");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-downloadLink.addEventListener("click", function () {
-  openSmartlinkOnceInWhile();
-});
 
 function uploadVideo(formData) {
   return new Promise((resolve, reject) => {
@@ -378,7 +295,7 @@ translateButton.addEventListener("click", async function () {
 });
 
 /* ---------- TEXT TRANSLATE (MyMemory - server မလို) ---------- */
-const MAX_CHUNK = 450;
+const MAX_CHUNK = 450; // MyMemory limit ~500 bytes per request
 
 function splitIntoChunks(text) {
   const pieces = text.match(/[^.!?。！？။\n]+[.!?。！？။\n]*/g) || [text];
@@ -444,6 +361,7 @@ textTranslateButton.addEventListener("click", async function () {
   setStatus(textStatus, "AI ဘာသာပြန်နေပါသည်...");
 
   try {
+    // 1) Gemini AI (server) ကို အရင်စမ်း
     try {
       const res = await fetchWithTimeout(SERVER_URL + "/api/text-translate", {
         method: "POST",
@@ -456,8 +374,9 @@ textTranslateButton.addEventListener("click", async function () {
         setStatus(textStatus, "ဘာသာပြန်ပြီးပါပြီ။ (Gemini AI)", "ok");
         return;
       }
-    } catch (e) {}
+    } catch (e) { /* server မရရင် အောက်က အခမဲ့စနစ်သို့ */ }
 
+    // 2) မရရင် MyMemory ဖြင့် ဆက်ပြန်
     setStatus(textStatus, "AI Server မရသဖြင့် အခြားစနစ်ဖြင့် ဘာသာပြန်နေပါသည်...");
     const chunks = splitIntoChunks(inputText);
     const results = [];
