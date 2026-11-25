@@ -49,6 +49,9 @@ button:disabled { background: #64748b; cursor: not-allowed; }
 .status { color: #a8dfff; text-align: center; margin-top: 14px; word-break: break-word; }
 .error-text { color: #ff7b7b; }
 .ok-text { color: #5eead4; }
+.progress { height: 10px; background: #0f1a2b; border-radius: 6px; overflow: hidden; margin-top: 14px; }
+.progress > div { height: 100%; width: 0; background: #16a8e0; transition: width .4s; }
+a.dl { display: block; text-align: center; background: #22c55e; color: white; font-weight: bold; padding: 13px; border-radius: 9px; margin-top: 12px; text-decoration: none; }
 .ad {
   text-align: center;
   border: 1px dashed #7b8da5;
@@ -90,10 +93,14 @@ footer { text-align: center; color: #91a1b6; font-size: 13px; margin-top: 25px; 
   <label for="voice">အသံရွေးချယ်ပါ</label>
   <select id="voice">
     <option value="male">မြန်မာအမျိုးသားအသံ</option>
+    <option value="female">မြန်မာအမျိုးသမီးအသံ</option>
   </select>
 
   <button id="translateButton">▶ ဘာသာပြန်စတင်မည်</button>
   <p class="status" id="status">Video ရွေးချယ်ရန် အသင့်ဖြစ်ပါပြီ။</p>
+  <div class="progress" id="progressWrap" hidden><div id="progressBar"></div></div>
+  <video id="resultVideo" controls playsinline hidden></video>
+  <a id="downloadLink" class="dl" hidden>⬇ MP4 ဒေါင်းလုဒ်လုပ်မည်</a>
 </div>
 
 <!-- TEXT -->
@@ -190,10 +197,44 @@ videoFile.addEventListener("change", function () {
   setStatus(statusText, "Video ရွေးချယ်ပြီးပါပြီ။");
 });
 
+const progressWrap = $("progressWrap");
+const progressBar = $("progressBar");
+const resultVideo = $("resultVideo");
+const downloadLink = $("downloadLink");
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function uploadVideo(formData) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", SERVER_URL + "/api/translate");
+    xhr.timeout = 20 * 60 * 1000;
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        setStatus(statusText, "Video ပို့နေပါသည်... " + pct + "% (ဖုန်းမပိတ်ပါနှင့်)");
+        progressBar.style.width = Math.max(2, pct * 0.2) + "%";
+      }
+    };
+    xhr.onload = () => {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText); } catch (e) {}
+      if (xhr.status >= 200 && xhr.status < 300 && data.jobId) resolve(data);
+      else reject(new Error(data.error || "Server Error (" + xhr.status + ")"));
+    };
+    xhr.onerror = () => reject(new Error("Server နှင့် ချိတ်ဆက်၍ မရပါ။"));
+    xhr.ontimeout = () => reject(new Error("Video ပို့ရာတွင် အချိန်ကြာလွန်းသွားပါသည်။"));
+    xhr.send(formData);
+  });
+}
+
 translateButton.addEventListener("click", async function () {
   const file = videoFile.files[0];
   if (!file) {
     setStatus(statusText, "အရင်ဆုံး Video ရွေးချယ်ပါ။", "error");
+    return;
+  }
+  if (file.size > 300 * 1024 * 1024) {
+    setStatus(statusText, "Video ဖိုင်က 300MB ထက် ကြီးနေပါသည်။", "error");
     return;
   }
 
@@ -204,26 +245,48 @@ translateButton.addEventListener("click", async function () {
   formData.append("voice", $("voice").value);
 
   translateButton.disabled = true;
+  resultVideo.hidden = true;
+  downloadLink.hidden = true;
+  progressWrap.hidden = false;
+  progressBar.style.width = "2%";
   setStatus(statusText, "Server သို့ Video ပို့နေပါသည်...");
 
   try {
-    const response = await fetchWithTimeout(
-      SERVER_URL + "/api/translate",
-      { method: "POST", body: formData },
-      10 * 60 * 1000
-    );
-    const result = await response.json().catch(() => ({}));
+    const { jobId } = await uploadVideo(formData);
+    let failures = 0;
 
-    if (response.status === 501) {
-      setStatus(statusText, result.message || "Video ကို Server က လက်ခံပါပြီ။ AI Video ဘာသာပြန်စနစ် မချိတ်ဆက်ရသေးပါ။");
-    } else if (!response.ok) {
-      throw new Error(result.error || "Server Error (" + response.status + ")");
-    } else {
-      setStatus(statusText, result.message || "ပြီးစီးပါပြီ။", "ok");
+    while (true) {
+      await sleep(3000);
+      let job;
+      try {
+        const r = await fetchWithTimeout(SERVER_URL + "/api/job/" + jobId, {}, 30000);
+        job = await r.json().catch(() => ({}));
+        if (r.status === 404) { const e = new Error(job.error || "အလုပ်ကို မတွေ့ပါ။"); e.fatal = true; throw e; }
+        if (!r.ok) throw new Error(job.error || "Status " + r.status);
+        failures = 0;
+      } catch (e) {
+        if (e.fatal || ++failures >= 10) throw e;
+        continue;
+      }
+
+      progressBar.style.width = (20 + (job.progress || 0) * 0.8) + "%";
+
+      if (job.status === "error") throw new Error(job.error || "ဘာသာပြန်မအောင်မြင်ပါ။");
+      if (job.status === "done") {
+        const url = SERVER_URL + "/api/download/" + jobId;
+        resultVideo.src = url + "?inline=1";
+        resultVideo.hidden = false;
+        downloadLink.href = url;
+        downloadLink.hidden = false;
+        progressBar.style.width = "100%";
+        setStatus(statusText, job.message || "ပြီးစီးပါပြီ။", "ok");
+        break;
+      }
+      setStatus(statusText, job.message || "လုပ်ဆောင်နေပါသည်...");
     }
   } catch (error) {
-    const msg = error.name === "AbortError" ? "အချိန်ကြာလွန်းသွားပါသည်။" : error.message;
-    setStatus(statusText, "Server ချိတ်ဆက်မှု မအောင်မြင်ပါ။ " + msg, "error");
+    progressWrap.hidden = true;
+    setStatus(statusText, "မအောင်မြင်ပါ။ " + error.message, "error");
   } finally {
     translateButton.disabled = false;
   }
