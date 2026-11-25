@@ -11,13 +11,44 @@ app.use(express.json({ limit: "10mb" }));
 const apiKey = process.env.GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
+// Render Environment ထဲမှာ GEMINI_MODEL ထည့်ပြီး model ပြောင်းလို့ရသည်
+const MODELS = [
+  process.env.GEMINI_MODEL,
+  "gemini-3.7-flash",
+  "gemini-3.6-flash",
+  "gemini-2.5-flash"
+].filter(Boolean);
+
 app.get("/", (req, res) => {
   res.json({ status: "ok", service: "SOE AI TRANSLATOR Backend" });
 });
 
 app.get("/health", (req, res) => {
-  res.json({ ok: true, hasApiKey: Boolean(apiKey) });
+  res.json({ ok: true, hasApiKey: Boolean(apiKey), models: MODELS });
 });
+
+function languageLabel(code = "auto") {
+  if (code === "th") return "Thai";
+  if (code === "en") return "English";
+  if (String(code).startsWith("zh")) return "Chinese";
+  return "auto-detected language";
+}
+
+async function translateWithFallback(prompt) {
+  let lastError;
+  for (const model of MODELS) {
+    try {
+      const response = await ai.models.generateContent({ model, contents: prompt });
+      const text = (response.text || "").trim();
+      if (text) return text;
+      lastError = new Error("Gemini မှ ရလဒ်အလွတ် ပြန်လာပါသည်။");
+    } catch (err) {
+      console.error(`Model ${model} failed:`, err.message);
+      lastError = err;
+    }
+  }
+  throw lastError || new Error("Gemini model မရပါ။");
+}
 
 app.post("/api/text-translate", async (req, res) => {
   try {
@@ -33,21 +64,11 @@ app.post("/api/text-translate", async (req, res) => {
       });
     }
 
-    const langLabel =
-      sourceLanguage === "th" ? "Thai" :
-      sourceLanguage === "zh" ? "Chinese" :
-      sourceLanguage === "en" ? "English" : "auto-detected language";
+    const prompt =
+      `Translate the following ${languageLabel(sourceLanguage)} text into natural, clear Myanmar (Burmese). ` +
+      `Return ONLY the translated Myanmar text without explanations or quotes:\n\n${text}`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
-      contents: `Translate the following ${langLabel} text into natural, clear Myanmar (Burmese). Return ONLY the translated Myanmar text without explanations or quotes:\n\n${text}`
-    });
-
-    const translatedText = (response.text || "").trim();
-    if (!translatedText) {
-      return res.status(500).json({ error: "Gemini မှ ဘာသာပြန်ရလဒ် ထွက်မလာပါ။" });
-    }
-
+    const translatedText = await translateWithFallback(prompt);
     return res.json({ translatedText });
   } catch (err) {
     console.error("Translate error:", err);
