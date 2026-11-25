@@ -15,43 +15,35 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-const apiKey = process.env.GEMINI_API_KEY;
-// TTS model များသည် v1beta လိုအပ်သည်
+const apiKey = (process.env.GEMINI_API_KEY || "").trim();
 const ai = apiKey ? new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "v1beta" } }) : null;
 
 /* ---------------- settings ---------------- */
-const TEXT_MODELS = [
-  process.env.GEMINI_MODEL,
-  "gemini-3.8-flash",
-  "gemini-3.7-flash",
-  "gemini-3.6-flash",
-  "gemini-3.5-flash",
-  "gemini-2.5-flash"
-].filter(Boolean);
+const PRIMARY_TEXT_MODEL = (process.env.GEMINI_MODEL || "gemini-3.8-flash").trim();
+const TEXT_MODELS = [...new Set([PRIMARY_TEXT_MODEL, "gemini-3.8-flash"].filter(Boolean))];
 
-const TTS_MODELS = [
-  process.env.GEMINI_TTS_MODEL,
-  "gemini-3.8-flash-tts",
-  "gemini-3.8-flash-lite-tts",
-  "gemini-3.1-flash-tts-preview",
-  "gemini-2.5-flash-preview-tts"
-].filter(Boolean);
+const PRIMARY_TTS_MODEL = (process.env.GEMINI_TTS_MODEL || "gemini-3.8-flash-tts").trim();
+const TTS_MODELS = [...new Set([PRIMARY_TTS_MODEL, "gemini-3.8-flash-tts"].filter(Boolean))];
 
 const VOICES = { male: "Charon", female: "Kore" };
-const MAX_VIDEO_SECONDS = 7 * 60;      // 5 မိနစ်ဗီဒီယိုအတွက် အနည်းငယ်ပိုခွင့်ပြု
+const MAX_VIDEO_SECONDS = 7 * 60;
 const MAX_UPLOAD_BYTES = 300 * 1024 * 1024;
 const TTS_SAMPLE_RATE = 24000;
 const MAX_TEMPO = 2.0;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Google error က JSON ပါလာတတ်လို့ အဓိကစာကိုပဲ ဆွဲထုတ်
+function isQuotaError(err) {
+  const msg = String(err?.message || err || "");
+  return msg.includes("429") || /quota|RESOURCE_EXHAUSTED|rate limit/i.test(msg);
+}
+
 function shortError(err, max = 160) {
   let msg = String(err?.message || err || "");
   try {
     const j = JSON.parse(msg);
     if (j?.error?.message) msg = `${j.error.code || ""} ${j.error.message}`.trim();
-  } catch (e) { /* JSON မဟုတ် */ }
+  } catch (e) {}
   return msg.replace(/\s+/g, " ").slice(0, max);
 }
 
@@ -61,7 +53,13 @@ app.get("/", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
-  res.json({ ok: true, hasApiKey: Boolean(apiKey), hasFfmpeg: Boolean(ffmpegPath) });
+  res.json({
+    ok: true,
+    hasApiKey: Boolean(apiKey),
+    hasFfmpeg: Boolean(ffmpegPath),
+    textModel: PRIMARY_TEXT_MODEL,
+    ttsModel: PRIMARY_TTS_MODEL
+  });
 });
 
 /* ---------------- Gemini helpers ---------------- */
@@ -74,8 +72,12 @@ function languageLabel(code = "auto") {
 
 let workingTextModel = null;
 async function generateText(contents) {
+  if (!ai) {
+    throw new Error("Render Environment ထဲတွင် GEMINI_API_KEY မရှိသေးပါ။");
+  }
   const order = [...new Set([workingTextModel, ...TEXT_MODELS].filter(Boolean))];
   const errors = [];
+
   for (const model of order) {
     try {
       const response = await ai.models.generateContent({ model, contents });
@@ -87,13 +89,30 @@ async function generateText(contents) {
       errors.push(`${model}: ရလဒ်အလွတ်`);
     } catch (err) {
       console.error(`Model ${model} failed:`, err.message);
+      if (isQuotaError(err)) {
+        await sleep(3000);
+        try {
+          const retryRes = await ai.models.generateContent({ model, contents });
+          const retryText = (retryRes.text || "").trim();
+          if (retryText) {
+            workingTextModel = model;
+            return retryText;
+          }
+        } catch (retryErr) {
+          throw new Error(
+            `Gemini Quota / Rate Limit ပြည့်သွားပါပြီ (429)။ Google AI Studio တွင် Quota/Billing စစ်ပါ သို့မဟုတ် API Key အသစ်ပြောင်းပါ။ (${shortError(retryErr)})`
+          );
+        }
+        throw new Error(
+          `Gemini Quota / Rate Limit ပြည့်သွားပါပြီ (429)။ Google AI Studio တွင် Quota/Billing စစ်ပါ သို့မဟုတ် API Key အသစ်ပြောင်းပါ။`
+        );
+      }
       errors.push(`${model}: ${shortError(err)}`);
     }
   }
   throw new Error("Gemini မအောင်မြင်ပါ။ " + (errors.join(" | ") || "model မရပါ။"));
 }
 
-// WAV (RIFF) ဖြစ်ရင် header ဖယ်ပြီး raw PCM ယူ၊ မဟုတ်ရင် PCM အတိုင်းသုံး
 function decodeAudio(buf, mime = "") {
   let rate = Number((/rate=(\d+)/.exec(mime) || [])[1]) || TTS_SAMPLE_RATE;
   if (buf.length > 44 && buf.toString("ascii", 0, 4) === "RIFF") {
@@ -114,31 +133,56 @@ function decodeAudio(buf, mime = "") {
 
 let workingTtsModel = null;
 async function ttsChunk(text, voiceName) {
+  if (!ai) {
+    throw new Error("Render Environment ထဲတွင် GEMINI_API_KEY မရှိသေးပါ။");
+  }
   const order = [...new Set([workingTtsModel, ...TTS_MODELS].filter(Boolean))];
   const errors = [];
+
   for (const model of order) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const response = await ai.models.generateContent({
-          model,
-          contents: [{ role: "user", parts: [{ text }] }],
-          config: {
-            responseModalities: ["AUDIO"],
-            speechConfig: {
-              voiceConfig: { prebuiltVoiceConfig: { voiceName } }
-            }
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: [{ role: "user", parts: [{ text }] }],
+        config: {
+          responseModalities: ["AUDIO"],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName } }
           }
-        });
-        const parts = response.candidates?.[0]?.content?.parts || [];
-        const part = parts.find((p) => p.inlineData?.data);
-        if (!part) throw new Error("TTS မှ အသံ ပြန်မလာပါ။");
-        workingTtsModel = model;
-        return decodeAudio(Buffer.from(part.inlineData.data, "base64"), part.inlineData.mimeType || "");
-      } catch (err) {
-        console.error(`TTS ${model} attempt ${attempt + 1} failed:`, err.message);
-        if (attempt === 1) errors.push(`${model}: ${shortError(err)}`);
-        await sleep(2000);
+        }
+      });
+      const parts = response.candidates?.[0]?.content?.parts || [];
+      const part = parts.find((p) => p.inlineData?.data);
+      if (!part) throw new Error("TTS မှ အသံ ပြန်မလာပါ။");
+      workingTtsModel = model;
+      return decodeAudio(Buffer.from(part.inlineData.data, "base64"), part.inlineData.mimeType || "");
+    } catch (err) {
+      console.error(`TTS ${model} failed:`, err.message);
+      if (isQuotaError(err)) {
+        await sleep(3000);
+        try {
+          const retryRes = await ai.models.generateContent({
+            model,
+            contents: [{ role: "user", parts: [{ text }] }],
+            config: {
+              responseModalities: ["AUDIO"],
+              speechConfig: {
+                voiceConfig: { prebuiltVoiceConfig: { voiceName } }
+              }
+            }
+          });
+          const parts = retryRes.candidates?.[0]?.content?.parts || [];
+          const part = parts.find((p) => p.inlineData?.data);
+          if (part) {
+            workingTtsModel = model;
+            return decodeAudio(Buffer.from(part.inlineData.data, "base64"), part.inlineData.mimeType || "");
+          }
+        } catch (retryErr) {
+          throw new Error(`TTS Quota ပြည့်သွားပါပြီ (429)။ (${shortError(retryErr)})`);
+        }
+        throw new Error(`TTS Quota ပြည့်သွားပါပြီ (429)။`);
       }
+      errors.push(`${model}: ${shortError(err)}`);
     }
   }
   throw new Error("TTS မအောင်မြင်ပါ။ " + (errors.join(" | ") || "model မရပါ။"));
@@ -167,8 +211,7 @@ function splitForTts(text, max = 600) {
   return chunks;
 }
 
-/* ---------------- diagnostic: Gemini ချိတ်ဆက်မှု စစ်ရန် ----------------
-   Browser မှာ  https://soe-ai-translator-app.onrender.com/api/test-gemini  ကို ဖွင့်ကြည့်ပါ */
+/* ---------------- diagnostic ---------------- */
 app.get("/api/test-gemini", async (req, res) => {
   if (!ai) return res.status(500).json({ ok: false, error: "GEMINI_API_KEY မရှိပါ။" });
   try {
@@ -263,13 +306,11 @@ async function processJob(job, file, opts) {
       throw new Error("ဗီဒီယိုက အရှည်လွန်းပါသည်။ ၇ မိနစ်အောက် သုံးပါ။");
     }
 
-    // 1) အသံထုတ်
     setJob(job, { progress: 8, message: "ဗီဒီယိုထဲက အသံကို ခွဲထုတ်နေပါသည်..." });
     const audioPath = path.join(dir, "audio.mp3");
     await runFfmpeg(["-i", file.path, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", audioPath]);
     const audioBase64 = fs.readFileSync(audioPath).toString("base64");
 
-    // 2) စကားနားထောင်ပြီး မြန်မာလို ဘာသာပြန်
     setJob(job, { progress: 20, message: "AI က စကားကို နားထောင်ပြီး မြန်မာလို ဘာသာပြန်နေပါသည်..." });
     const prompt =
       `Listen to this audio (spoken language: ${languageLabel(opts.sourceLanguage)}). ` +
@@ -289,7 +330,6 @@ async function processJob(job, file, opts) {
       throw new Error("ဗီဒီယိုထဲတွင် စကားပြောသံ မတွေ့ပါ။");
     }
 
-    // 3) မြန်မာအသံ ဖန်တီး
     const voiceName = VOICES[opts.voice] || VOICES.male;
     const chunks = splitForTts(burmese);
     const pcmParts = [];
@@ -307,7 +347,6 @@ async function processJob(job, file, opts) {
     fs.writeFileSync(pcmPath, pcm);
     await runFfmpeg(["-f", "s16le", "-ar", String(ttsRate), "-ac", "1", "-i", pcmPath, ttsWav]);
 
-    // 4) အသံနဲ့ ဗီဒီယိုကို ပေါင်း
     setJob(job, { progress: 85, message: "အသံအသစ်ကို ဗီဒီယိုနဲ့ ပေါင်းနေပါသည်..." });
     const ttsDuration = pcm.length / (ttsRate * 2);
     let tempo = ttsDuration / info.duration;
@@ -323,7 +362,6 @@ async function processJob(job, file, opts) {
       ttsFilter = `atempo=${tempo.toFixed(3)}`;
     }
 
-    // မူရင်းအသံ (နောက်ခံအပါအဝင်) ကို လုံးဝဖယ်ပြီး မြန်မာအသံသာ ထည့်သည်
     const filter = `[1:a]${ttsFilter},apad[a]`;
 
     const outPath = path.join(dir, "output.mp4");
@@ -395,7 +433,6 @@ app.post("/api/translate", upload.single("video"), (req, res) => {
     voice: req.body?.voice || "male"
   };
 
-  // နောက်ကွယ်မှာ လုပ်ဆောင်
   processJob(job, req.file, opts);
 
   return res.json({ jobId });
@@ -420,14 +457,12 @@ app.get("/api/download/:id", (req, res) => {
   if (!job || job.status !== "done" || !job.outPath || !fs.existsSync(job.outPath)) {
     return res.status(404).json({ error: "ဖိုင်ကို မတွေ့ပါ။" });
   }
-  // sendFile က Range request (iPhone Safari အတွက် လိုအပ်) ကို အလိုအလျောက် ကိုင်တွယ်
   if (req.query.inline) {
     return res.type("video/mp4").sendFile(job.outPath);
   }
   return res.download(job.outPath, "soe-translated.mp4");
 });
 
-// ၃၀ မိနစ်ကျော်တဲ့ အလုပ်တွေကို ရှင်း
 setInterval(() => {
   const now = Date.now();
   for (const [id, job] of jobs) {
