@@ -69,10 +69,10 @@
   .ad {
     text-align: center;
     border: 1px dashed #7b8da5;
-    padding: 10px;
+    padding: 12px;
     border-radius: 10px;
     color: #b8c6d8;
-    min-height: 70px;
+    min-height: 260px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -158,18 +158,18 @@
   <p class="status" id="serverStatus">AI Server အခြေအနေ စစ်ဆေးနေပါသည်...</p>
 </div>
 
-<!-- ADVERTISEMENT BANNER (320x50) -->
+<!-- ADVERTISEMENT BANNER (300x250) -->
 <div class="ad" id="adBanner">
   <script type="text/javascript">
     atOptions = {
-      'key' : '35a59dd96dca39119323e757d456edd6',
+      'key' : '9c00a751d36bb3fd0fab385c7bd6777a',
       'format' : 'iframe',
-      'height' : 50,
-      'width' : 320,
+      'height' : 250,
+      'width' : 300,
       'params' : {}
     };
   </script>
-  <script type="text/javascript" src="//www.highperformanceformat.com/35a59dd96dca39119323e757d456edd6/invoke.js"></script>
+  <script type="text/javascript" src="https://www.highperformanceformat.com/9c00a751d36bb3fd0fab385c7bd6777a/invoke.js"></script>
 </div>
 
 <footer>© 2026 SOE AI TRANSLATOR</footer>
@@ -213,11 +213,12 @@ window.addEventListener("appinstalled", () => {
   deferredPrompt = null;
 });
 
-/* ---------- Adsterra Smartlink ---------- */
+/* ---------- Adsterra Smartlink (လိုအပ်ပါက Link အသစ်ဖြင့် အစားထိုးနိုင်သည်) ---------- */
 const AD_SMARTLINK_URL = "https://directyp.org/4/dd75774dfc8901622cde7a1ba4d427d9";
 const AD_COOLDOWN_MS = 3 * 60 * 1000;
 
 function openSmartlinkOnceInWhile() {
+  if (!AD_SMARTLINK_URL) return;
   try {
     const last = Number(localStorage.getItem("soe_ad_last") || 0);
     const now = Date.now();
