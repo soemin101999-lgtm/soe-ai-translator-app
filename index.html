@@ -61,19 +61,23 @@ footer { text-align: center; color: #91a1b6; font-size: 13px; margin-top: 25px; 
   <select id="sourceLanguage">
     <option value="en">English</option>
     <option value="zh">Chinese</option>
-    <option value="th">Thai</option>
+    <option value="th">Thai (ไทย)</option>
+    <option value="my">Myanmar (မြန်မာ)</option>
     <option value="auto">Auto Detect</option>
   </select>
 
   <label for="targetLanguage">ပြန်ဆိုမည့်ဘာသာစကား</label>
   <select id="targetLanguage">
     <option value="my">Myanmar (မြန်မာ)</option>
+    <option value="th">Thai (ไทย)</option>
+    <option value="en">English</option>
+    <option value="zh">Chinese (中文)</option>
   </select>
 
   <label for="voice">အသံရွေးချယ်ပါ</label>
   <select id="voice">
-    <option value="male">မြန်မာအမျိုးသားအသံ</option>
-    <option value="female">မြန်မာအမျိုးသမီးအသံ</option>
+    <option value="male">အမျိုးသားအသံ</option>
+    <option value="female">အမျိုးသမီးအသံ</option>
   </select>
 
   <button id="translateButton">▶ ဘာသာပြန်စတင်မည်</button>
@@ -93,16 +97,25 @@ footer { text-align: center; color: #91a1b6; font-size: 13px; margin-top: 25px; 
   <select id="textSourceLanguage">
     <option value="en">English</option>
     <option value="zh-CN">Chinese</option>
-    <option value="th">Thai</option>
+    <option value="th">Thai (ไทย)</option>
+    <option value="my">Myanmar (မြန်မာ)</option>
     <option value="auto">Auto Detect</option>
+  </select>
+
+  <label for="textTargetLanguage">ပြန်ဆိုမည့်ဘာသာစကား</label>
+  <select id="textTargetLanguage">
+    <option value="my">Myanmar (မြန်မာ)</option>
+    <option value="th">Thai (ไทย)</option>
+    <option value="en">English</option>
+    <option value="zh">Chinese (中文)</option>
   </select>
 
   <label for="inputText">ဘာသာပြန်မည့်စာသား</label>
   <textarea id="inputText" placeholder="ဘာသာပြန်မည့်စာသားကို ဒီမှာထည့်ပါ..."></textarea>
 
-  <button id="textTranslateButton">မြန်မာဘာသာပြန်မည်</button>
+  <button id="textTranslateButton">ဘာသာပြန်မည်</button>
 
-  <label for="translatedText">မြန်မာဘာသာပြန်ရလဒ်</label>
+  <label for="translatedText">ဘာသာပြန်ရလဒ်</label>
   <textarea id="translatedText" readonly placeholder="ဘာသာပြန်ရလဒ် ဒီမှာပေါ်လာပါမည်..."></textarea>
   <button id="copyButton" class="secondary">📋 ကူးယူမည်</button>
 
@@ -389,10 +402,10 @@ function splitIntoChunks(text) {
   return chunks.map((c) => c.trim()).filter(Boolean);
 }
 
-async function translateChunk(chunk, source) {
+async function translateChunk(chunk, source, target) {
   const from = source === "auto" ? "Autodetect" : source;
   const url = "https://api.mymemory.translated.net/get?q=" +
-    encodeURIComponent(chunk) + "&langpair=" + encodeURIComponent(from + "|my");
+    encodeURIComponent(chunk) + "&langpair=" + encodeURIComponent(from + "|" + (target === "zh" ? "zh-CN" : target));
 
   const response = await fetchWithTimeout(url, {}, 20000);
   if (!response.ok) throw new Error("Status " + response.status);
@@ -414,6 +427,7 @@ const textTranslateButton = $("textTranslateButton");
 textTranslateButton.addEventListener("click", async function () {
   const inputText = $("inputText").value.trim();
   const sourceLanguage = $("textSourceLanguage").value;
+  const targetLanguage = $("textTargetLanguage").value;
   const output = $("translatedText");
   const textStatus = $("textStatus");
 
@@ -435,7 +449,7 @@ textTranslateButton.addEventListener("click", async function () {
       const res = await fetchWithTimeout(SERVER_URL + "/api/text-translate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: inputText, sourceLanguage })
+        body: JSON.stringify({ text: inputText, sourceLanguage, targetLanguage })
       }, 60000);
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.translatedText) {
@@ -452,7 +466,7 @@ textTranslateButton.addEventListener("click", async function () {
       if (chunks.length > 1) {
         setStatus(textStatus, "ဘာသာပြန်နေပါသည်... (" + (i + 1) + "/" + chunks.length + ")");
       }
-      results.push(await translateChunk(chunks[i], sourceLanguage));
+      results.push(await translateChunk(chunks[i], sourceLanguage, targetLanguage));
       output.value = results.join(" ");
     }
     setStatus(textStatus, "ဘာသာပြန်ပြီးပါပြီ။", "ok");
