@@ -73,9 +73,22 @@ function languageLabel(code = "auto") {
 }
 
 let workingTextModel = null;
+// quota ကုန်/မရှိတဲ့ model ကို ခဏကျော်ပြီး အချိန်မကုန်အောင် လုပ်
+const modelCooldown = new Map();
+function coolDown(model, err) {
+  const m = String(err?.message || err);
+  let ms = 0;
+  if (/PerDay|per day/i.test(m)) ms = 60 * 60 * 1000;                 // တစ်ရက် quota ကုန် → ၁ နာရီ ကျော်
+  else if (/429|RESOURCE_EXHAUSTED/i.test(m)) ms = 2 * 60 * 1000;     // မိနစ် limit → ၂ မိနစ်
+  else if (/404|NOT_FOUND|no longer available/i.test(m)) ms = 6 * 60 * 60 * 1000;
+  if (ms) modelCooldown.set(model, Date.now() + ms);
+}
+
 async function generateText(contents) {
   if (!ai) throw new Error("GEMINI_API_KEY မရှိပါ။");
-  const order = [...new Set([workingTextModel, ...TEXT_MODELS].filter(Boolean))];
+  let order = [...new Set([workingTextModel, ...TEXT_MODELS].filter(Boolean))];
+  const active = order.filter((m) => (modelCooldown.get(m) || 0) <= Date.now());
+  if (active.length) order = active; // အားလုံးကုန်နေမှ ပြန်စမ်း
   const errors = [];
   for (const model of order) {
     try {
@@ -88,6 +101,7 @@ async function generateText(contents) {
       errors.push(`${model}: ရလဒ်အလွတ်`);
     } catch (err) {
       console.error(`Model ${model} failed:`, err.message);
+      coolDown(model, err);
       errors.push(`${model}: ${shortError(err)}`);
     }
   }
@@ -379,6 +393,8 @@ async function speechToBurmese(audioPath, audioBase64, opts, job) {
 
 async function processJob(job, file, opts) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "soe-job-"));
+  const t0 = Date.now();
+  const lap = (name) => console.log(`[job ${job.id.slice(0, 6)}] ${name}: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   try {
     setJob(job, { status: "processing", progress: 3, message: "ဗီဒီယိုကို စစ်ဆေးနေပါသည်..." });
     const info = await probeVideo(file.path);
@@ -396,17 +412,27 @@ async function processJob(job, file, opts) {
 
     // 2) စကားနားထောင်ပြီး မြန်မာလို ဘာသာပြန်
     const burmese = await speechToBurmese(audioPath, audioBase64, opts, job);
+    lap("speech→Burmese");
 
     // 3) မြန်မာအသံ ဖန်တီး
     const chunks = splitForTts(burmese);
-    const pcmParts = [];
-    for (let i = 0; i < chunks.length; i++) {
-      setJob(job, {
-        progress: 35 + Math.round((i / chunks.length) * 45),
-        message: `မြန်မာအသံ ဖန်တီးနေပါသည်... (${i + 1}/${chunks.length})`
-      });
-      pcmParts.push(await synthChunk(chunks[i], opts.voice, dir, i));
-    }
+    const pcmParts = new Array(chunks.length);
+    let nextIdx = 0, doneCount = 0;
+    const worker = async () => {
+      while (true) {
+        const i = nextIdx++;
+        if (i >= chunks.length) return;
+        pcmParts[i] = await synthChunk(chunks[i], opts.voice, dir, i);
+        doneCount++;
+        setJob(job, {
+          progress: 35 + Math.round((doneCount / chunks.length) * 45),
+          message: `မြန်မာအသံ ဖန်တီးနေပါသည်... (${doneCount}/${chunks.length})`
+        });
+      }
+    };
+    // chunk ၃ ခုကို တစ်ပြိုင်နက် လုပ် (အမြန်ဆုံးဖြစ်အောင်)
+    await Promise.all(Array.from({ length: Math.min(3, chunks.length) }, worker));
+    lap("TTS");
     const ttsRate = pcmParts[0].rate;
     const pcm = Buffer.concat(pcmParts.map((x) => x.pcm));
     const pcmPath = path.join(dir, "tts.pcm");
@@ -460,6 +486,7 @@ async function processJob(job, file, opts) {
       ]);
     }
 
+    lap("mux done");
     setJob(job, {
       status: "done",
       progress: 100,
