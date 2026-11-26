@@ -37,7 +37,7 @@ const TTS_MODELS = [
   "gemini-2.5-flash-preview-tts"
 ].filter(Boolean);
 
-// ပြန်ဆိုမည့်ဘာသာ (target): မြန်မာ / ထိုင်း
+// ပြန်ဆိုမည့်ဘာသာ (target): မြန်မာ / ထိုင်း / အင်္ဂလိပ် / တရုတ်
 const TARGETS = {
   my: { label: "Myanmar (Burmese)", mm: "my", edge: { male: "my-MM-ThihaNeural", female: "my-MM-NilarNeural" } },
   th: { label: "Thai", mm: "th", edge: { male: "th-TH-NiwatNeural", female: "th-TH-PremwadeeNeural" } },
@@ -46,11 +46,11 @@ const TARGETS = {
 };
 const getTarget = (code) => TARGETS[code] || TARGETS.my;
 
-const VOICES = { male: "Charon", female: "Kore" };
-const MAX_VIDEO_SECONDS = 7 * 60;      // 5 မိနစ်ဗီဒီယိုအတွက် အနည်းငယ်ပိုခွင့်ပြု
+const VOICES = { male: "Charon", female: "Kore", child: "Puck" };
+const MAX_VIDEO_SECONDS = 7 * 60;
 const MAX_UPLOAD_BYTES = 300 * 1024 * 1024;
 const TTS_SAMPLE_RATE = 24000;
-const MAX_TEMPO = 2.0;
+const MAX_TEMPO = 1.45; // အသံနူးညံ့မှုမပျက်စေရန် ထိန်းညှိထားသည်
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -83,13 +83,12 @@ function languageLabel(code = "auto") {
 }
 
 let workingTextModel = null;
-// quota ကုန်/မရှိတဲ့ model ကို ခဏကျော်ပြီး အချိန်မကုန်အောင် လုပ်
 const modelCooldown = new Map();
 function coolDown(model, err) {
   const m = String(err?.message || err);
   let ms = 0;
-  if (/PerDay|per day/i.test(m)) ms = 60 * 60 * 1000;                 // တစ်ရက် quota ကုန် → ၁ နာရီ ကျော်
-  else if (/429|RESOURCE_EXHAUSTED/i.test(m)) ms = 2 * 60 * 1000;     // မိနစ် limit → ၂ မိနစ်
+  if (/PerDay|per day/i.test(m)) ms = 60 * 60 * 1000;
+  else if (/429|RESOURCE_EXHAUSTED/i.test(m)) ms = 2 * 60 * 1000;
   else if (/404|NOT_FOUND|no longer available/i.test(m)) ms = 6 * 60 * 60 * 1000;
   if (ms) modelCooldown.set(model, Date.now() + ms);
 }
@@ -98,7 +97,7 @@ async function generateText(contents) {
   if (!ai) throw new Error("GEMINI_API_KEY မရှိပါ။");
   let order = [...new Set([workingTextModel, ...TEXT_MODELS].filter(Boolean))];
   const active = order.filter((m) => (modelCooldown.get(m) || 0) <= Date.now());
-  if (active.length) order = active; // အားလုံးကုန်နေမှ ပြန်စမ်း
+  if (active.length) order = active;
   const errors = [];
   for (const model of order) {
     try {
@@ -118,7 +117,6 @@ async function generateText(contents) {
   throw new Error("Gemini မအောင်မြင်ပါ။ " + (errors.join(" | ") || "model မရပါ။"));
 }
 
-// WAV (RIFF) ဖြစ်ရင် header ဖယ်ပြီး raw PCM ယူ၊ မဟုတ်ရင် PCM အတိုင်းသုံး
 function decodeAudio(buf, mime = "") {
   let rate = Number((/rate=(\d+)/.exec(mime) || [])[1]) || TTS_SAMPLE_RATE;
   if (buf.length > 44 && buf.toString("ascii", 0, 4) === "RIFF") {
@@ -137,16 +135,27 @@ function decodeAudio(buf, mime = "") {
   return { pcm: buf, rate };
 }
 
+function buildGentleTtsInput(text, tag = "M") {
+  const styleHint =
+    tag === "C"
+      ? "Speak softly, gently, and naturally like a sweet child: "
+      : tag === "F"
+      ? "Speak warmly, softly, and naturally: "
+      : "Speak calmly, smoothly, and naturally: ";
+  return `${styleHint}${text}`;
+}
+
 let workingTtsModel = null;
-async function ttsChunk(text, voiceName) {
+async function ttsChunk(text, voiceName, tag = "M") {
   const order = [...new Set([workingTtsModel, ...TTS_MODELS].filter(Boolean))];
   const errors = [];
+  const spokenText = buildGentleTtsInput(text, tag);
   for (const model of order) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const response = await ai.models.generateContent({
           model,
-          contents: [{ role: "user", parts: [{ text }] }],
+          contents: [{ role: "user", parts: [{ text: spokenText }] }],
           config: {
             responseModalities: ["AUDIO"],
             speechConfig: {
@@ -169,16 +178,15 @@ async function ttsChunk(text, voiceName) {
   throw new Error("TTS မအောင်မြင်ပါ။ " + (errors.join(" | ") || "model မရပါ။"));
 }
 
-/* ---------------- အခမဲ့ မြန်မာအသံ (Microsoft Edge TTS) ----------------
-   API key မလို၊ quota မရှိ။ မရမှ Gemini TTS ကို အရန်သုံးသည်။ */
-
+/* ---------------- အခမဲ့ အသံ (Microsoft Edge TTS) ---------------- */
 function escapeXml(t) {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 async function edgeTtsChunk(text, voiceKey, dir, idx, target) {
   const tts = new MsEdgeTTS();
-  await tts.setMetadata(getTarget(target).edge[voiceKey] || getTarget(target).edge.male, OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS);
+  const edgeVoiceKey = voiceKey === "female" ? "female" : "male";
+  await tts.setMetadata(getTarget(target).edge[edgeVoiceKey] || getTarget(target).edge.male, OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS);
   const { audioStream } = await tts.toStream(escapeXml(text));
   const bufs = [];
   await new Promise((resolve, reject) => {
@@ -199,17 +207,18 @@ async function edgeTtsChunk(text, voiceKey, dir, idx, target) {
 }
 
 // Edge (အခမဲ့) ကို အရင်၊ မရမှ Gemini
-async function synthChunk(text, voiceKey, dir, idx, target) {
+async function synthChunk(text, voiceKey, dir, idx, target, tag = "M") {
   try {
     return await edgeTtsChunk(text, voiceKey, dir, idx, target);
   } catch (err) {
     console.error("Edge TTS failed, falling back to Gemini:", err.message);
     if (!ai) throw err;
-    return await ttsChunk(text, VOICES[voiceKey] || VOICES.male);
+    const geminiVoice = tag === "C" ? VOICES.child : VOICES[voiceKey] || VOICES.male;
+    return await ttsChunk(text, geminiVoice, tag);
   }
 }
 
-function splitForTts(text, max = 600) {
+function splitForTts(text, max = 450) {
   const pieces = text.match(/[^.!?။。！？\n]+[.!?။。！？\n]*/g) || [text];
   const chunks = [];
   let current = "";
@@ -232,8 +241,37 @@ function splitForTts(text, max = 600) {
   return chunks;
 }
 
-/* ---------------- diagnostic: Gemini ချိတ်ဆက်မှု စစ်ရန် ----------------
-   Browser မှာ  https://soe-ai-translator-app.onrender.com/api/test-gemini  ကို ဖွင့်ကြည့်ပါ */
+/* [M], [F], [C] Tag အလိုက် အသံခွဲခြင်း */
+function parseSpeakerSegments(scriptText, fallbackVoice = "male") {
+  const defaultVoice = fallbackVoice === "female" ? "female" : "male";
+  const lines = String(scriptText || "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const segments = [];
+  for (const line of lines) {
+    const match = line.match(/^\[(M|F|C)\]\s*(.+)$/i);
+    const tag = match ? match[1].toUpperCase() : null;
+    const speech = (match ? match[2] : line).trim();
+    if (!speech) continue;
+
+    let voiceKey = defaultVoice;
+    if (tag === "F") voiceKey = "female";
+    else if (tag === "M" || tag === "C") voiceKey = "male";
+
+    for (const part of splitForTts(speech, 450)) {
+      segments.push({
+        tag: tag || (voiceKey === "female" ? "F" : "M"),
+        voiceKey,
+        text: part
+      });
+    }
+  }
+  return segments;
+}
+
+/* ---------------- diagnostic ---------------- */
 app.get("/api/test-gemini", async (req, res) => {
   if (!ai) return res.status(500).json({ ok: false, error: "GEMINI_API_KEY မရှိပါ။" });
   try {
@@ -259,7 +297,7 @@ app.post("/api/text-translate", async (req, res) => {
     }
 
     const prompt =
-      `Translate the following ${languageLabel(sourceLanguage)} text into natural, clear ${getTarget(targetLanguage).label}. ` +
+      `Translate the following ${languageLabel(sourceLanguage)} text into natural, soft, and clear ${getTarget(targetLanguage).label}. ` +
       `Return ONLY the translated ${getTarget(targetLanguage).label} text without explanations or quotes:\n\n${text}`;
 
     const translatedText = await generateText(prompt);
@@ -317,8 +355,7 @@ function safeRm(p) {
   if (p) fs.rm(p, { recursive: true, force: true }, () => {});
 }
 
-/* ---------------- အခမဲ့ စကားနားထောင်ခြင်း (Groq Whisper) ----------------
-   Gemini quota မသုံးဘဲ စကားကို စာသားပြောင်း။ ပြီးမှ စာသားသက်သက်ကို မြန်မာပြန်။ */
+/* ---------------- အခမဲ့ စကားနားထောင်ခြင်း (Groq Whisper) ---------------- */
 async function groqTranscribe(filePath, sourceLanguage) {
   const form = new FormData();
   form.append("file", new Blob([fs.readFileSync(filePath)], { type: "audio/mpeg" }), "audio.mp3");
@@ -340,7 +377,6 @@ async function groqTranscribe(filePath, sourceLanguage) {
   return String(data.text || "").trim();
 }
 
-// MyMemory (အခမဲ့၊ key မလို) — နောက်ဆုံးအရန်
 async function myMemoryTranslate(text, sourceLanguage, targetLanguage = "my") {
   const from = sourceLanguage === "auto" ? "Autodetect" : sourceLanguage === "zh" ? "zh-CN" : sourceLanguage;
   const out = [];
@@ -358,9 +394,9 @@ async function myMemoryTranslate(text, sourceLanguage, targetLanguage = "my") {
 
 async function translateTranscript(transcript, sourceLanguage, targetLanguage = "my") {
   const prompt =
-    `Translate the following ${languageLabel(sourceLanguage)} transcript into natural, clear ${getTarget(targetLanguage).label}, ` +
-    `suitable for voice narration. Write one sentence per line. ` +
-    `Return ONLY the ${getTarget(targetLanguage).label} text with no explanations or notes:\n\n${transcript}`;
+    `Translate the following ${languageLabel(sourceLanguage)} transcript into natural, soft, and clear ${getTarget(targetLanguage).label}, ` +
+    `suitable for smooth voice narration. Prefix each sentence line with [M], [F], or [C] if speaker gender/age is clear from context. ` +
+    `Write one sentence per line. Return ONLY the ${getTarget(targetLanguage).label} text with no explanations or notes:\n\n${transcript}`;
   try {
     return await generateText(prompt);
   } catch (err) {
@@ -369,7 +405,6 @@ async function translateTranscript(transcript, sourceLanguage, targetLanguage = 
   }
 }
 
-// ဗီဒီယိုအသံ → မြန်မာစာသား (Groq အရင်၊ မရမှ Gemini audio)
 async function speechToBurmese(audioPath, audioBase64, opts, job) {
   if (groqKey) {
     try {
@@ -378,18 +413,20 @@ async function speechToBurmese(audioPath, audioBase64, opts, job) {
       if (transcript.length < 2) {
         throw Object.assign(new Error("ဗီဒီယိုထဲတွင် စကားပြောသံ မတွေ့ပါ။"), { noSpeech: true });
       }
-      setJob(job, { progress: 28, message: "မြန်မာလို ဘာသာပြန်နေပါသည်..." });
+      setJob(job, { progress: 28, message: "ယောက်ျား / မိန်းကလေး / ကလေး အသံများ ခွဲခြားဘာသာပြန်နေပါသည်..." });
       return await translateTranscript(transcript, opts.sourceLanguage, opts.targetLanguage);
     } catch (err) {
       if (err.noSpeech) throw err;
       console.error("Groq path failed, falling back to Gemini audio:", err.message);
     }
   }
-  setJob(job, { progress: 20, message: "AI က စကားကို နားထောင်ပြီး မြန်မာလို ဘာသာပြန်နေပါသည်..." });
+  setJob(job, { progress: 20, message: "ယောက်ျား၊ မိန်းကလေး၊ ကလေး အသံများကို ခွဲခြားဘာသာပြန်နေပါသည်..." });
   const prompt =
-    `Listen to this audio (spoken language: ${languageLabel(opts.sourceLanguage)}). ` +
-    `Translate everything that is spoken into natural, clear ${getTarget(opts.targetLanguage).label}, suitable for voice narration. ` +
-    `Write one sentence per line. Return ONLY the ${getTarget(opts.targetLanguage).label} narration text, with no explanations, timestamps or notes. ` +
+    `Listen carefully to this audio (spoken language: ${languageLabel(opts.sourceLanguage)}). ` +
+    `The audio may contain male voices, female voices, and/or child voices. ` +
+    `Translate everything that is spoken into natural, soft, and clear ${getTarget(opts.targetLanguage).label}, suitable for smooth voice narration. ` +
+    `Prefix each line with [M] for male speaker, [F] for female speaker, or [C] for child speaker based on the voice you hear. ` +
+    `Write one sentence per line. Return ONLY the tagged ${getTarget(opts.targetLanguage).label} narration text, with no explanations, timestamps or notes. ` +
     `If there is no speech, return exactly: NO_SPEECH`;
   const text = await generateText([
     { role: "user", parts: [{ inlineData: { mimeType: "audio/mp3", data: audioBase64 } }, { text: prompt }] }
@@ -419,29 +456,35 @@ async function processJob(job, file, opts) {
     await runFfmpeg(["-i", file.path, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", audioPath]);
     const audioBase64 = fs.readFileSync(audioPath).toString("base64");
 
-    // 2) စကားနားထောင်ပြီး မြန်မာလို ဘာသာပြန်
+    // 2) စကားနားထောင်ပြီး ဘာသာပြန်
     const burmese = await speechToBurmese(audioPath, audioBase64, opts, job);
-    lap("speech→Burmese");
+    lap("speech→translated");
 
-    // 3) မြန်မာအသံ ဖန်တီး
-    const chunks = splitForTts(burmese);
-    const pcmParts = new Array(chunks.length);
+    // 3) [M], [F], [C] အလိုက် အသံဖန်တီး
+    const segments = parseSpeakerSegments(burmese, opts.voice);
+    if (!segments.length) {
+      throw new Error("ဘာသာပြန်စာသားမှ အသံဖန်တီးရန် စာကြောင်း မတွေ့ပါ။");
+    }
+
+    const pcmParts = new Array(segments.length);
     let nextIdx = 0, doneCount = 0;
     const worker = async () => {
       while (true) {
         const i = nextIdx++;
-        if (i >= chunks.length) return;
-        pcmParts[i] = await synthChunk(chunks[i], opts.voice, dir, i, opts.targetLanguage);
+        if (i >= segments.length) return;
+        const seg = segments[i];
+        pcmParts[i] = await synthChunk(seg.text, seg.voiceKey, dir, i, opts.targetLanguage, seg.tag);
         doneCount++;
+        const label = seg.tag === "C" ? "ကလေးအသံ" : seg.tag === "F" ? "မိန်းကလေးအသံ" : "ယောက်ျားအသံ";
         setJob(job, {
-          progress: 35 + Math.round((doneCount / chunks.length) * 45),
-          message: `မြန်မာအသံ ဖန်တီးနေပါသည်... (${doneCount}/${chunks.length})`
+          progress: 35 + Math.round((doneCount / segments.length) * 45),
+          message: `${label} ဖန်တီးနေပါသည်... (${doneCount}/${segments.length})`
         });
       }
     };
-    // chunk ၃ ခုကို တစ်ပြိုင်နက် လုပ် (အမြန်ဆုံးဖြစ်အောင်)
-    await Promise.all(Array.from({ length: Math.min(3, chunks.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(3, segments.length) }, worker));
     lap("TTS");
+
     const ttsRate = pcmParts[0].rate;
     const pcm = Buffer.concat(pcmParts.map((x) => x.pcm));
     const pcmPath = path.join(dir, "tts.pcm");
@@ -449,24 +492,24 @@ async function processJob(job, file, opts) {
     fs.writeFileSync(pcmPath, pcm);
     await runFfmpeg(["-f", "s16le", "-ar", String(ttsRate), "-ac", "1", "-i", pcmPath, ttsWav]);
 
-    // 4) အသံနဲ့ ဗီဒီယိုကို ပေါင်း
-    setJob(job, { progress: 85, message: "အသံအသစ်ကို ဗီဒီယိုနဲ့ ပေါင်းနေပါသည်..." });
+    // 4) အသံနဲ့ ဗီဒီယိုကို ပိုနူးညံ့ချောမွေ့အောင် ပေါင်း
+    setJob(job, { progress: 85, message: "အသံအသစ်ကို ဗီဒီယိုနဲ့ ညှိပြီး ပေါင်းနေပါသည်..." });
     const ttsDuration = pcm.length / (ttsRate * 2);
     let tempo = ttsDuration / info.duration;
     let note = "";
-    let ttsFilter = "anull";
+    let tempoFilter = "anull";
     if (tempo > 1.02) {
       if (tempo > MAX_TEMPO) {
-        note = " (မြန်မာအသံက ဗီဒီယိုထက် အလွန်ရှည်နေလို့ နောက်ပိုင်း ဖြတ်ထားနိုင်ပါသည်)";
+        note = " (အသံနူးညံ့မှုမပျက်စေရန် အတိုင်းအတာတစ်ခုအထိသာ ညှိထားပါသည်)";
         tempo = MAX_TEMPO;
       } else {
-        note = " (အသံကို ဗီဒီယိုအရှည်နဲ့ ကိုက်အောင် အမြန်ပြုပြင်ထားသည်)";
+        note = " (အသံကို ဗီဒီယိုအရှည်နဲ့ ကိုက်အောင် ညင်သာစွာ ညှိပေးထားသည်)";
       }
-      ttsFilter = `atempo=${tempo.toFixed(3)}`;
+      tempoFilter = `atempo=${tempo.toFixed(3)}`;
     }
 
-    // မူရင်းအသံ (နောက်ခံအပါအဝင်) ကို လုံးဝဖယ်ပြီး မြန်မာအသံသာ ထည့်သည်
-    const filter = `[1:a]${ttsFilter},apad[a]`;
+    const fadeOutStart = Math.max(0, info.duration - 0.15);
+    const filter = `[1:a]${tempoFilter},afade=t=in:st=0:d=0.05,afade=t=out:st=${fadeOutStart.toFixed(2)}:d=0.15,apad[a]`;
 
     const outPath = path.join(dir, "output.mp4");
     const baseArgs = [
@@ -539,7 +582,6 @@ app.post("/api/translate", upload.single("video"), (req, res) => {
     voice: req.body?.voice || "male"
   };
 
-  // နောက်ကွယ်မှာ လုပ်ဆောင်
   processJob(job, req.file, opts);
 
   return res.json({ jobId });
@@ -564,14 +606,12 @@ app.get("/api/download/:id", (req, res) => {
   if (!job || job.status !== "done" || !job.outPath || !fs.existsSync(job.outPath)) {
     return res.status(404).json({ error: "ဖိုင်ကို မတွေ့ပါ။" });
   }
-  // sendFile က Range request (iPhone Safari အတွက် လိုအပ်) ကို အလိုအလျောက် ကိုင်တွယ်
   if (req.query.inline) {
     return res.type("video/mp4").sendFile(job.outPath);
   }
   return res.download(job.outPath, "soe-translated.mp4");
 });
 
-// ၃၀ မိနစ်ကျော်တဲ့ အလုပ်တွေကို ရှင်း
 setInterval(() => {
   const now = Date.now();
   for (const [id, job] of jobs) {
