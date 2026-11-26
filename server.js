@@ -37,6 +37,15 @@ const TTS_MODELS = [
   "gemini-2.5-flash-preview-tts"
 ].filter(Boolean);
 
+// ပြန်ဆိုမည့်ဘာသာ (target): မြန်မာ / ထိုင်း
+const TARGETS = {
+  my: { label: "Myanmar (Burmese)", mm: "my", edge: { male: "my-MM-ThihaNeural", female: "my-MM-NilarNeural" } },
+  th: { label: "Thai", mm: "th", edge: { male: "th-TH-NiwatNeural", female: "th-TH-PremwadeeNeural" } },
+  en: { label: "English", mm: "en", edge: { male: "en-US-GuyNeural", female: "en-US-JennyNeural" } },
+  zh: { label: "Simplified Chinese (Mandarin)", mm: "zh-CN", edge: { male: "zh-CN-YunxiNeural", female: "zh-CN-XiaoxiaoNeural" } }
+};
+const getTarget = (code) => TARGETS[code] || TARGETS.my;
+
 const VOICES = { male: "Charon", female: "Kore" };
 const MAX_VIDEO_SECONDS = 7 * 60;      // 5 မိနစ်ဗီဒီယိုအတွက် အနည်းငယ်ပိုခွင့်ပြု
 const MAX_UPLOAD_BYTES = 300 * 1024 * 1024;
@@ -66,6 +75,7 @@ app.get("/health", (req, res) => {
 
 /* ---------------- Gemini helpers ---------------- */
 function languageLabel(code = "auto") {
+  if (code === "my") return "Burmese (Myanmar)";
   if (code === "th") return "Thai";
   if (code === "en") return "English";
   if (String(code).startsWith("zh")) return "Chinese";
@@ -161,15 +171,14 @@ async function ttsChunk(text, voiceName) {
 
 /* ---------------- အခမဲ့ မြန်မာအသံ (Microsoft Edge TTS) ----------------
    API key မလို၊ quota မရှိ။ မရမှ Gemini TTS ကို အရန်သုံးသည်။ */
-const EDGE_VOICES = { male: "my-MM-ThihaNeural", female: "my-MM-NilarNeural" };
 
 function escapeXml(t) {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-async function edgeTtsChunk(text, voiceKey, dir, idx) {
+async function edgeTtsChunk(text, voiceKey, dir, idx, target) {
   const tts = new MsEdgeTTS();
-  await tts.setMetadata(EDGE_VOICES[voiceKey] || EDGE_VOICES.male, OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS);
+  await tts.setMetadata(getTarget(target).edge[voiceKey] || getTarget(target).edge.male, OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS);
   const { audioStream } = await tts.toStream(escapeXml(text));
   const bufs = [];
   await new Promise((resolve, reject) => {
@@ -190,9 +199,9 @@ async function edgeTtsChunk(text, voiceKey, dir, idx) {
 }
 
 // Edge (အခမဲ့) ကို အရင်၊ မရမှ Gemini
-async function synthChunk(text, voiceKey, dir, idx) {
+async function synthChunk(text, voiceKey, dir, idx, target) {
   try {
-    return await edgeTtsChunk(text, voiceKey, dir, idx);
+    return await edgeTtsChunk(text, voiceKey, dir, idx, target);
   } catch (err) {
     console.error("Edge TTS failed, falling back to Gemini:", err.message);
     if (!ai) throw err;
@@ -238,7 +247,7 @@ app.get("/api/test-gemini", async (req, res) => {
 /* ---------------- text translate ---------------- */
 app.post("/api/text-translate", async (req, res) => {
   try {
-    const { text, sourceLanguage = "auto" } = req.body || {};
+    const { text, sourceLanguage = "auto", targetLanguage = "my" } = req.body || {};
 
     if (!text || !String(text).trim()) {
       return res.status(400).json({ error: "ဘာသာပြန်မည့်စာသား လိုအပ်ပါသည်။" });
@@ -250,8 +259,8 @@ app.post("/api/text-translate", async (req, res) => {
     }
 
     const prompt =
-      `Translate the following ${languageLabel(sourceLanguage)} text into natural, clear Myanmar (Burmese). ` +
-      `Return ONLY the translated Myanmar text without explanations or quotes:\n\n${text}`;
+      `Translate the following ${languageLabel(sourceLanguage)} text into natural, clear ${getTarget(targetLanguage).label}. ` +
+      `Return ONLY the translated ${getTarget(targetLanguage).label} text without explanations or quotes:\n\n${text}`;
 
     const translatedText = await generateText(prompt);
     return res.json({ translatedText });
@@ -316,7 +325,7 @@ async function groqTranscribe(filePath, sourceLanguage) {
   form.append("model", process.env.GROQ_STT_MODEL || "whisper-large-v3-turbo");
   form.append("response_format", "json");
   form.append("temperature", "0");
-  const lang = sourceLanguage === "en" ? "en" : sourceLanguage === "th" ? "th" :
+  const lang = sourceLanguage === "en" ? "en" : sourceLanguage === "th" ? "th" : sourceLanguage === "my" ? "my" :
     String(sourceLanguage).startsWith("zh") ? "zh" : null;
   if (lang) form.append("language", lang);
 
@@ -332,12 +341,12 @@ async function groqTranscribe(filePath, sourceLanguage) {
 }
 
 // MyMemory (အခမဲ့၊ key မလို) — နောက်ဆုံးအရန်
-async function myMemoryTranslate(text, sourceLanguage) {
+async function myMemoryTranslate(text, sourceLanguage, targetLanguage = "my") {
   const from = sourceLanguage === "auto" ? "Autodetect" : sourceLanguage === "zh" ? "zh-CN" : sourceLanguage;
   const out = [];
   for (const chunk of splitForTts(text, 450)) {
     const url = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(chunk) +
-      "&langpair=" + encodeURIComponent(from + "|my");
+      "&langpair=" + encodeURIComponent(from + "|" + getTarget(targetLanguage).mm);
     const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
     const d = await r.json().catch(() => ({}));
     const t = d?.responseData?.translatedText;
@@ -347,16 +356,16 @@ async function myMemoryTranslate(text, sourceLanguage) {
   return out.join("\n");
 }
 
-async function translateTranscript(transcript, sourceLanguage) {
+async function translateTranscript(transcript, sourceLanguage, targetLanguage = "my") {
   const prompt =
-    `Translate the following ${languageLabel(sourceLanguage)} transcript into natural, clear Myanmar (Burmese), ` +
+    `Translate the following ${languageLabel(sourceLanguage)} transcript into natural, clear ${getTarget(targetLanguage).label}, ` +
     `suitable for voice narration. Write one sentence per line. ` +
-    `Return ONLY the Myanmar text with no explanations or notes:\n\n${transcript}`;
+    `Return ONLY the ${getTarget(targetLanguage).label} text with no explanations or notes:\n\n${transcript}`;
   try {
     return await generateText(prompt);
   } catch (err) {
     console.error("Gemini text translate failed, using MyMemory:", err.message);
-    return await myMemoryTranslate(transcript, sourceLanguage);
+    return await myMemoryTranslate(transcript, sourceLanguage, targetLanguage);
   }
 }
 
@@ -370,7 +379,7 @@ async function speechToBurmese(audioPath, audioBase64, opts, job) {
         throw Object.assign(new Error("ဗီဒီယိုထဲတွင် စကားပြောသံ မတွေ့ပါ။"), { noSpeech: true });
       }
       setJob(job, { progress: 28, message: "မြန်မာလို ဘာသာပြန်နေပါသည်..." });
-      return await translateTranscript(transcript, opts.sourceLanguage);
+      return await translateTranscript(transcript, opts.sourceLanguage, opts.targetLanguage);
     } catch (err) {
       if (err.noSpeech) throw err;
       console.error("Groq path failed, falling back to Gemini audio:", err.message);
@@ -379,8 +388,8 @@ async function speechToBurmese(audioPath, audioBase64, opts, job) {
   setJob(job, { progress: 20, message: "AI က စကားကို နားထောင်ပြီး မြန်မာလို ဘာသာပြန်နေပါသည်..." });
   const prompt =
     `Listen to this audio (spoken language: ${languageLabel(opts.sourceLanguage)}). ` +
-    `Translate everything that is spoken into natural, clear Myanmar (Burmese), suitable for voice narration. ` +
-    `Write one sentence per line. Return ONLY the Myanmar narration text, with no explanations, timestamps or notes. ` +
+    `Translate everything that is spoken into natural, clear ${getTarget(opts.targetLanguage).label}, suitable for voice narration. ` +
+    `Write one sentence per line. Return ONLY the ${getTarget(opts.targetLanguage).label} narration text, with no explanations, timestamps or notes. ` +
     `If there is no speech, return exactly: NO_SPEECH`;
   const text = await generateText([
     { role: "user", parts: [{ inlineData: { mimeType: "audio/mp3", data: audioBase64 } }, { text: prompt }] }
@@ -422,7 +431,7 @@ async function processJob(job, file, opts) {
       while (true) {
         const i = nextIdx++;
         if (i >= chunks.length) return;
-        pcmParts[i] = await synthChunk(chunks[i], opts.voice, dir, i);
+        pcmParts[i] = await synthChunk(chunks[i], opts.voice, dir, i, opts.targetLanguage);
         doneCount++;
         setJob(job, {
           progress: 35 + Math.round((doneCount / chunks.length) * 45),
@@ -526,6 +535,7 @@ app.post("/api/translate", upload.single("video"), (req, res) => {
 
   const opts = {
     sourceLanguage: req.body?.sourceLanguage || "auto",
+    targetLanguage: TARGETS[req.body?.targetLanguage] ? req.body.targetLanguage : "my",
     voice: req.body?.voice || "male"
   };
 
