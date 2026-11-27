@@ -44,7 +44,7 @@
     }
 
     .reward-btn {
-      display: none; width: 100%; padding: 12px; margin-bottom: 14px;
+      display: block; width: 100%; padding: 12px; margin-bottom: 14px;
       border: 0; border-radius: 10px; background: #f59e0b;
       color: #1c1003; font-weight: 700; font-size: 0.95rem; cursor: pointer;
     }
@@ -180,7 +180,7 @@
       <div style="color:var(--muted);font-size:0.8rem">နောက်တစ်ရက်မှာ ပြန်ရပါမည်</div>
     </div>
 
-    <button id="rewardBtn" class="reward-btn" type="button">🎁 ကြော်ငြာကြည့်ပြီး ၁ ကြိမ် ထပ်ရယူမည်</button>
+    <button id="rewardBtn" class="reward-btn" type="button">🎁 ကြော်ငြာကြည့်ပြီး ၁ ကြိမ် ထပ်ရယူမည် (0/5)</button>
 
     <div class="tabs">
       <button type="button" class="tab-btn active" data-tab="video">Video Dubbing</button>
@@ -397,8 +397,15 @@
       const el = document.getElementById("quotaCount");
       el.textContent = `${q.remaining} ကြိမ်`;
       el.style.color = q.remaining > 0 ? "var(--accent-2)" : "var(--danger)";
-      const canReward = q.remaining <= 0 && q.bonusUsed < MAX_AD_BONUS_PER_DAY;
-      rewardBtn.style.display = canReward ? "block" : "none";
+
+      rewardBtn.style.display = "block";
+      if (q.bonusUsed >= MAX_AD_BONUS_PER_DAY) {
+        rewardBtn.textContent = `🎁 ယနေ့ ကြော်ငြာ Bonus ပြည့်သွားပါပြီ (${q.bonusUsed}/${MAX_AD_BONUS_PER_DAY})`;
+      } else if (q.remaining > 0) {
+        rewardBtn.textContent = `🎁 ကြော်ငြာကြည့်ပြီး Bonus ယူရန် (${q.bonusUsed}/${MAX_AD_BONUS_PER_DAY})`;
+      } else {
+        rewardBtn.textContent = `🎁 ကြော်ငြာကြည့်ပြီး ၁ ကြိမ် ထပ်ရယူမည် (${q.bonusUsed}/${MAX_AD_BONUS_PER_DAY})`;
+      }
     }
     updateQuotaUI();
 
@@ -412,7 +419,15 @@
 
     function openRewardModal() {
       const q = loadQuota();
-      if (q.bonusUsed >= MAX_AD_BONUS_PER_DAY) return;
+      if (q.remaining > 0) {
+        showVideoError(`ယခု အခမဲ့ အကြိမ်ရေ ${q.remaining} ကြိမ် ကျန်ရှိနေပါသေးသည်။ ကုန်သွားမှ သို့မဟုတ် လိုအပ်မှ ကြော်ငြာကြည့်နိုင်ပါသည်။`);
+        return;
+      }
+      if (q.bonusUsed >= MAX_AD_BONUS_PER_DAY) {
+        showVideoError("ယနေ့ ကြော်ငြာကြည့်ပြီး Bonus ရယူခွင့် (၅ ကြိမ်) ပြည့်သွားပါပြီ။");
+        return;
+      }
+      clearVideoError();
       rewardFrame.srcdoc = bannerHtml;
       rewardModal.classList.add("show");
       claimBtn.disabled = true;
