@@ -1,506 +1,488 @@
 <!DOCTYPE html>
 <html lang="my">
 <head>
-<meta name="monetag" content="...">
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#101827">
-<link rel="manifest" href="./manifest.json">
-<title>SOE AI TRANSLATOR</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SOE AI TRANSLATOR</title>
 
-<style>
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-body {
-  margin: 0;
-  padding: 18px;
-  background: #101827;
-  color: white;
-  font-family: Arial, "Noto Sans Myanmar", "Myanmar Text", sans-serif;
-}
-.container { max-width: 600px; margin: auto; }
-header { text-align: center; padding: 20px 5px; }
-h1 { color: #35c9ff; margin-bottom: 6px; }
-.panel { background: #1c293c; padding: 18px; border-radius: 15px; margin-bottom: 16px; }
-label { display: block; margin: 14px 0 7px; }
-input, select, textarea, button { width: 100%; padding: 13px; border-radius: 9px; border: 0; font-size: 16px; font-family: inherit; }
-input, select, textarea { background: #edf3fa; color: #111827; }
-textarea { height: 120px; resize: vertical; }
-video { width: 100%; margin-top: 14px; border-radius: 10px; background: black; }
-button { background: #16a8e0; color: white; font-weight: bold; margin-top: 15px; cursor: pointer; }
-button.secondary { background: #2f4562; margin-top: 8px; }
-button.save { background: #22c55e; }
-button:disabled { background: #64748b; cursor: not-allowed; }
-.status { color: #a8dfff; text-align: center; margin-top: 14px; word-break: break-word; }
-.error-text { color: #ff7b7b; }
-.ok-text { color: #5eead4; }
-.hint { color: #91a1b6; font-size: 13px; text-align: center; margin: 8px 0 0; }
-.progress { height: 10px; background: #0f1a2b; border-radius: 6px; overflow: hidden; margin-top: 14px; }
-.progress > div { height: 100%; width: 0; background: #16a8e0; transition: width .4s; }
-a.dl { display: block; text-align: center; background: #2f4562; color: white; font-weight: bold; padding: 13px; border-radius: 9px; margin-top: 8px; text-decoration: none; }
-.ad { text-align: center; border: 1px dashed #7b8da5; padding: 18px; border-radius: 10px; color: #b8c6d8; }
-footer { text-align: center; color: #91a1b6; font-size: 13px; margin-top: 25px; }
-</style>
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0ea5e9" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+
+  <!-- Monetag verification meta tag ရှိရင် ဒီနေရာမှာ ထည့်ပါ -->
+
+  <style>
+    :root {
+      --bg: #0f172a; --card: #1e293b; --card-2: #0b1220; --text: #f8fafc;
+      --muted: #94a3b8; --accent: #38bdf8; --accent-2: #22c55e;
+      --danger: #ef4444; --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(180deg, #090d16 0%, var(--bg) 100%);
+      color: var(--text); min-height: 100vh; padding: 20px 14px 48px;
+    }
+    .container { max-width: 760px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 18px; }
+    header h1 { margin: 0 0 6px; font-size: 1.65rem; color: var(--accent); }
+    header p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+
+    .quota-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 10px; flex-wrap: wrap; background: var(--card);
+      border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px 14px; margin-bottom: 14px; font-size: 0.9rem;
+    }
+    .quota-badge { font-weight: 700; color: var(--accent-2); }
+    .install-btn {
+      display: none; width: 100%; padding: 12px; margin-bottom: 14px;
+      border: 0; border-radius: 10px; background: var(--accent-2);
+      color: #052e16; font-weight: 700; font-size: 0.95rem; cursor: pointer;
+    }
+
+    .tabs {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      background: var(--card-2); padding: 6px; border-radius: 12px;
+      border: 1px solid var(--border); margin-bottom: 16px;
+    }
+    .tab-btn {
+      padding: 10px 12px; border: none; border-radius: 8px;
+      background: transparent; color: var(--muted); font-weight: 600;
+      cursor: pointer; font-size: 0.95rem;
+    }
+    .tab-btn.active { background: var(--accent); color: #06131f; }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 18px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.28);
+    }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+    @media (max-width: 600px) { .grid-3, .grid-2 { grid-template-columns: 1fr; } }
+
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+    select, input[type="file"], textarea {
+      width: 100%; background: var(--card-2); color: var(--text);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 12px; font-size: 0.95rem;
+    }
+    textarea { min-height: 120px; resize: vertical; }
+    .file-box { margin-bottom: 14px; }
+    .primary-btn {
+      width: 100%; padding: 12px 16px; border: none; border-radius: 10px;
+      background: var(--accent); color: #06131f; font-weight: 700;
+      font-size: 1rem; cursor: pointer;
+    }
+    .primary-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .progress-wrap { margin-top: 16px; display: none; }
+    .progress-bar-bg {
+      width: 100%; height: 10px; background: var(--card-2);
+      border-radius: 999px; overflow: hidden; margin-top: 8px;
+    }
+    .progress-bar-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      transition: width 0.3s ease;
+    }
+    .status-text { font-size: 0.9rem; margin-top: 6px; }
+
+    .ad-box {
+      margin-top: 14px; padding: 10px; border-radius: 12px;
+      background: var(--card-2); border: 1px dashed var(--border);
+      text-align: center; min-height: 275px; display: flex;
+      flex-direction: column; align-items: center; justify-content: center;
+    }
+    .ad-label {
+      font-size: 0.72rem; color: var(--muted); margin-bottom: 6px;
+      text-transform: uppercase; letter-spacing: 0.6px;
+    }
+    .ad-frame { width: 300px; height: 250px; border: 0; overflow: hidden; background: transparent; }
+
+    .ad-strip { margin: 0 auto 14px; text-align: center; }
+    .ad-frame-320 { width: 320px; max-width: 100%; height: 50px; border: 0; overflow: hidden; background: transparent; }
+
+    .error-box {
+      margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+      background: rgba(239,68,68,0.14); border: 1px solid rgba(239,68,68,0.45);
+      color: #fecaca; font-size: 0.9rem; display: none;
+    }
+    .result-box { margin-top: 16px; display: none; }
+    video { width: 100%; border-radius: 12px; background: #000; max-height: 440px; }
+    .actions { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+    .download-btn {
+      display: inline-block; text-decoration: none; padding: 10px 16px;
+      border-radius: 10px; background: var(--accent-2); color: #052e16;
+      font-weight: 700; font-size: 0.92rem;
+    }
+    .script-box {
+      margin-top: 12px; background: var(--card-2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px; white-space: pre-wrap;
+      font-size: 0.9rem; line-height: 1.55;
+    }
+    .copy-btn {
+      margin-top: 8px; padding: 8px 14px; border: 0; border-radius: 8px;
+      background: var(--border); color: var(--text); cursor: pointer; font-size: 0.85rem;
+    }
+    .note { color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 18px; line-height: 1.6; }
+    .hidden { display: none; }
+  </style>
 </head>
-
 <body>
-<div class="container">
+  <div class="container">
+    <header>
+      <h1>SOE AI TRANSLATOR</h1>
+      <p>ယောက်ျားသံ / မိန်းကလေးသံ ခွဲခြားပြီး အခမဲ့ ဗီဒီယို ဘာသာပြန်စနစ်</p>
+    </header>
 
-<header>
-  <h1>SOE AI TRANSLATOR</h1>
-  <p>AI Video &amp; Text Translation to Myanmar Language</p>
-</header>
+    <div class="ad-strip">
+      <span class="ad-label">Sponsored</span><br />
+      <iframe class="ad-frame-320" scrolling="no" title="ad"></iframe>
+    </div>
 
-<!-- VIDEO -->
-<div class="panel">
-  <h3>🎬 Video ရွေးချယ်ပါ</h3>
-  <input type="file" id="videoFile" accept="video/*">
-  <video id="videoPreview" controls playsinline hidden></video>
+    <button id="installBtn" class="install-btn" type="button">📲 App အဖြစ် Install လုပ်မည်</button>
 
-  <label for="sourceLanguage">မူရင်းဘာသာစကား</label>
-  <select id="sourceLanguage">
-    <option value="en">English</option>
-    <option value="zh">Chinese</option>
-    <option value="th">Thai (ไทย)</option>
-    <option value="my">Myanmar (မြန်မာ)</option>
-    <option value="auto">Auto Detect</option>
-  </select>
+    <div class="quota-bar">
+      <div>ယနေ့ ဗီဒီယို ဘာသာပြန်ခွင့် ကျန်ရှိမှု: <span id="quotaCount" class="quota-badge">3 ကြိမ်</span></div>
+      <div style="color:var(--muted);font-size:0.8rem">နောက်တစ်ရက်မှာ ပြန်ရပါမည်</div>
+    </div>
 
-  <label for="targetLanguage">ပြန်ဆိုမည့်ဘာသာစကား</label>
-  <select id="targetLanguage">
-    <option value="my">Myanmar (မြန်မာ)</option>
-    <option value="th">Thai (ไทย)</option>
-    <option value="en">English</option>
-    <option value="zh">Chinese (中文)</option>
-  </select>
+    <div class="tabs">
+      <button type="button" class="tab-btn active" data-tab="video">Video Dubbing</button>
+      <button type="button" class="tab-btn" data-tab="text">Text Translate (အခမဲ့)</button>
+    </div>
 
-  <label for="voice">အသံရွေးချယ်ပါ</label>
-  <select id="voice">
-    <option value="male">အမျိုးသားအသံ</option>
-    <option value="female">အမျိုးသမီးအသံ</option>
-  </select>
+    <!-- Video Tab -->
+    <section id="tab-video" class="card">
+      <form id="videoForm">
+        <div class="grid-3">
+          <div>
+            <label for="sourceLang">မူရင်းဘာသာ</label>
+            <select id="sourceLang">
+              <option value="auto" selected>Auto Detect</option>
+              <option value="en">English</option>
+              <option value="th">Thai</option>
+              <option value="zh">Chinese</option>
+              <option value="my">Burmese</option>
+            </select>
+          </div>
+          <div>
+            <label for="targetLang">ပြန်ဆိုမည့်ဘာသာ</label>
+            <select id="targetLang">
+              <option value="my" selected>Myanmar (မြန်မာ)</option>
+              <option value="th">Thai (ထိုင်း)</option>
+              <option value="en">English (အင်္ဂလိပ်)</option>
+              <option value="zh">Chinese (တရုတ်)</option>
+            </select>
+          </div>
+          <div>
+            <label for="voiceSelect">အသံ (Default Voice)</label>
+            <select id="voiceSelect">
+              <option value="male" selected>Male (ယောက်ျားသံ)</option>
+              <option value="female">Female (မိန်းကလေးသံ)</option>
+            </select>
+          </div>
+        </div>
 
-  <button id="translateButton">▶ ဘာသာပြန်စတင်မည်</button>
-  <p class="status" id="status">Video ရွေးချယ်ရန် အသင့်ဖြစ်ပါပြီ။</p>
-  <div class="progress" id="progressWrap" hidden><div id="progressBar"></div></div>
-  <video id="resultVideo" controls playsinline webkit-playsinline preload="metadata" hidden></video>
-  <button id="downloadButton" class="save" hidden>⬇ ဗီဒီယို သိမ်းမည်</button>
-  <a id="downloadLink" class="dl" hidden>Link ဖြင့် ဒေါင်းလုဒ်လုပ်မည်</a>
-  <p id="saveHint" class="hint" hidden></p>
-</div>
+        <div class="file-box">
+          <label for="videoInput">ဗီဒီယိုဖိုင် ရွေးချယ်ပါ (၅ မိနစ်အောက် MP4 / MOV)</label>
+          <input id="videoInput" type="file" accept="video/*" required />
+        </div>
 
-<!-- TEXT -->
-<div class="panel">
-  <h3>🌐 AI စာသားဘာသာပြန်စနစ်</h3>
+        <button id="videoBtn" type="submit" class="primary-btn">ဗီဒီယို ဘာသာပြန်မည်</button>
+      </form>
 
-  <label for="textSourceLanguage">မူရင်းဘာသာစကား</label>
-  <select id="textSourceLanguage">
-    <option value="en">English</option>
-    <option value="zh-CN">Chinese</option>
-    <option value="th">Thai (ไทย)</option>
-    <option value="my">Myanmar (မြန်မာ)</option>
-    <option value="auto">Auto Detect</option>
-  </select>
+      <div id="videoProgressWrap" class="progress-wrap">
+        <div id="videoStatusText" class="status-text">စတင်နေပါသည်...</div>
+        <div class="progress-bar-bg"><div id="videoProgressBar" class="progress-bar-fill"></div></div>
 
-  <label for="textTargetLanguage">ပြန်ဆိုမည့်ဘာသာစကား</label>
-  <select id="textTargetLanguage">
-    <option value="my">Myanmar (မြန်မာ)</option>
-    <option value="th">Thai (ไทย)</option>
-    <option value="en">English</option>
-    <option value="zh">Chinese (中文)</option>
-  </select>
+        <div class="ad-box">
+          <span class="ad-label">Sponsored</span>
+          <iframe class="ad-frame" scrolling="no" title="ad"></iframe>
+        </div>
+      </div>
 
-  <label for="inputText">ဘာသာပြန်မည့်စာသား</label>
-  <textarea id="inputText" placeholder="ဘာသာပြန်မည့်စာသားကို ဒီမှာထည့်ပါ..."></textarea>
+      <div id="videoError" class="error-box"></div>
 
-  <button id="textTranslateButton">ဘာသာပြန်မည်</button>
+      <div id="videoResult" class="result-box">
+        <video id="resultVideo" controls playsinline></video>
+        <div class="actions">
+          <a id="downloadLink" class="download-btn" href="#" download="soe-translated.mp4">ဗီဒီယို Download ဆွဲရန်</a>
+        </div>
 
-  <label for="translatedText">ဘာသာပြန်ရလဒ်</label>
-  <textarea id="translatedText" readonly placeholder="ဘာသာပြန်ရလဒ် ဒီမှာပေါ်လာပါမည်..."></textarea>
-  <button id="copyButton" class="secondary">📋 ကူးယူမည်</button>
+        <div class="ad-box">
+          <span class="ad-label">Sponsored</span>
+          <iframe class="ad-frame" scrolling="no" title="ad"></iframe>
+        </div>
 
-  <p id="textStatus" class="status"></p>
-</div>
+        <div id="resultScript" class="script-box"></div>
+      </div>
+    </section>
 
-<!-- AUDIO INFO -->
-<div class="panel">
-  <h3>🎵 အသံစနစ်</h3>
-  <p>မူရင်းစကားပြောသံကို မြန်မာအသံဖြင့် အစားထိုးရန်</p>
-  <p>နောက်ခံတေးဂီတကို ထိန်းသိမ်းရန်</p>
-  <p>MP4 ဖိုင်အဖြစ် ထုတ်ယူရန်</p>
-  <p class="status" id="serverStatus">AI Server အခြေအနေ စစ်ဆေးနေပါသည်...</p>
-</div>
+    <!-- Text Tab -->
+    <section id="tab-text" class="card hidden">
+      <form id="textForm">
+        <div class="grid-2">
+          <div>
+            <label for="textSourceLang">မူရင်းဘာသာ</label>
+            <select id="textSourceLang">
+              <option value="auto" selected>Auto Detect</option>
+              <option value="en">English</option>
+              <option value="th">Thai</option>
+              <option value="zh">Chinese</option>
+              <option value="my">Burmese</option>
+            </select>
+          </div>
+          <div>
+            <label for="textTargetLang">ပြန်ဆိုမည့်ဘာသာ</label>
+            <select id="textTargetLang">
+              <option value="my" selected>Myanmar (မြန်မာ)</option>
+              <option value="th">Thai (ထိုင်း)</option>
+              <option value="en">English (အင်္ဂလိပ်)</option>
+              <option value="zh">Chinese (တရုတ်)</option>
+            </select>
+          </div>
+        </div>
 
-<div class="ad">
-  Advertisement Banner
-  <p>ကြော်ငြာနေရာ (နမူနာသာ)</p>
-</div>
+        <div class="file-box">
+          <label for="sourceText">ဘာသာပြန်မည့် စာသား</label>
+          <textarea id="sourceText" placeholder="ဒီနေရာမှာ စာသား ရိုက်ထည့်ပါ..." required></textarea>
+        </div>
 
-<footer>© 2026 SOE AI TRANSLATOR</footer>
+        <button id="textBtn" type="submit" class="primary-btn">စာသား ဘာသာပြန်မည်</button>
+      </form>
 
-</div>
+      <div id="textError" class="error-box"></div>
+      <div id="textWrap" class="hidden">
+        <div id="textResult" class="script-box"></div>
+        <button id="copyBtn" type="button" class="copy-btn">📋 ကူးယူမည်</button>
+      </div>
+    </section>
 
-<script>
-const SERVER_URL = "https://soe-ai-translator-app.onrender.com";
+    <p class="note">
+      ကြော်ငြာများကို မနှိပ်ဘဲ အသုံးပြုနိုင်ပါသည်။<br />
+      AI Server စတင်ရန် ပထမအကြိမ် စက္ကန့် ၃၀–၆၀ ကြာနိုင်ပါသည်။<br />
+      © 2026 SOE AI TRANSLATOR
+    </p>
+  </div>
 
-/* ---------- helpers ---------- */
-const $ = (id) => document.getElementById(id);
-const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  <script>
+    const API_BASE = "https://soe-ai-translator-app.onrender.com";
 
-const isAndroid = /Android/i.test(navigator.userAgent);
-
-function setStatus(el, text, type) {
-  el.textContent = text;
-  el.className = "status" + (type === "ok" ? " ok-text" : type === "error" ? " error-text" : "");
-}
-
-function fetchWithTimeout(url, options = {}, ms = 20000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ms);
-  return fetch(url, { ...options, signal: controller.signal })
-    .finally(() => clearTimeout(timer));
-}
-
-/* ---------- server health ---------- */
-async function checkServerHealth() {
-  const el = $("serverStatus");
-  setStatus(el, "AI Server နိုးနေပါသည်... (စက္ကန့် ၆၀ လောက် ကြာနိုင်သည်)");
-  try {
-    const res = await fetchWithTimeout(SERVER_URL + "/health", {}, 60000);
-    if (res.ok) {
-      setStatus(el, "AI Server ချိတ်ဆက်မှု အဆင်ပြေပါသည်။", "ok");
-    } else {
-      setStatus(el, "AI Server ကို စစ်ဆေးရန် လိုအပ်ပါသည်။ (Status: " + res.status + ")", "error");
+    /* ---------- PWA ---------- */
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
     }
-  } catch (err) {
-    setStatus(el, "AI Server ချိတ်ဆက်၍ မရပါ။ (Server ပိတ်နေ / URL မှား / CORS ပြဿနာ ဖြစ်နိုင်သည်)", "error");
-  }
-}
-checkServerHealth();
+    let deferredPrompt = null;
+    const installBtn = document.getElementById("installBtn");
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installBtn.style.display = "block";
+    });
+    installBtn.addEventListener("click", async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      installBtn.style.display = "none";
+    });
 
-/* ---------- VIDEO ---------- */
-const videoFile = $("videoFile");
-const videoPreview = $("videoPreview");
-const statusText = $("status");
-const translateButton = $("translateButton");
-let currentVideoURL = null;
-
-videoFile.addEventListener("change", function () {
-  const file = this.files[0];
-  if (!file) return;
-  if (currentVideoURL) URL.revokeObjectURL(currentVideoURL);
-  currentVideoURL = URL.createObjectURL(file);
-  videoPreview.src = currentVideoURL;
-  videoPreview.hidden = false;
-  setStatus(statusText, "Video ရွေးချယ်ပြီးပါပြီ။");
-});
-
-const progressWrap = $("progressWrap");
-const progressBar = $("progressBar");
-const resultVideo = $("resultVideo");
-const downloadLink = $("downloadLink");
-const downloadButton = $("downloadButton");
-const saveHint = $("saveHint");
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function uploadVideo(formData) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", SERVER_URL + "/api/translate");
-    xhr.timeout = 20 * 60 * 1000;
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const pct = Math.round((e.loaded / e.total) * 100);
-        setStatus(statusText, "Video ပို့နေပါသည်... " + pct + "% (ဖုန်းမပိတ်ပါနှင့်)");
-        progressBar.style.width = Math.max(2, pct * 0.2) + "%";
-      }
-    };
-    xhr.onload = () => {
-      let data = {};
-      try { data = JSON.parse(xhr.responseText); } catch (e) {}
-      if (xhr.status >= 200 && xhr.status < 300 && data.jobId) resolve(data);
-      else reject(new Error(data.error || "Server Error (" + xhr.status + ")"));
-    };
-    xhr.onerror = () => reject(new Error("Server နှင့် ချိတ်ဆက်၍ မရပါ။"));
-    xhr.ontimeout = () => reject(new Error("Video ပို့ရာတွင် အချိန်ကြာလွန်းသွားပါသည်။"));
-    xhr.send(formData);
-  });
-}
-
-/* ---------- ရလဒ်ကို iPhone အတွက် ပြင်ဆင်ခြင်း ----------
-   ဗီဒီယိုကို ဖုန်းထဲ blob အဖြစ် အရင်ဆွဲယူပြီး
-   - player က blob ကို တိုက်ရိုက်ဖွင့် (Safari က server Range request မလိုတော့)
-   - "သိမ်းမည်" က Share sheet (Save Video) ကို ဖွင့်ပေး */
-let resultBlobUrl = null;
-let resultFile = null;
-
-async function prepareResult(url) {
-  if (resultBlobUrl) URL.revokeObjectURL(resultBlobUrl);
-  resultBlobUrl = null;
-  resultFile = null;
-  saveHint.hidden = true;
-
-  try {
-    setStatus(statusText, "ဗီဒီယိုကို ဖုန်းထဲ ဆွဲယူနေပါသည်...");
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("Download Error (" + res.status + ")");
-    const blob = new Blob([await res.blob()], { type: "video/mp4" });
-    if (!blob.size) throw new Error("ဗီဒီယိုဖိုင် ဗလာဖြစ်နေပါသည်။");
-
-    resultBlobUrl = URL.createObjectURL(blob);
-    resultFile = new File([blob], "soe-translated.mp4", { type: "video/mp4" });
-    resultVideo.src = resultBlobUrl;
-    resultVideo.hidden = false;
-    downloadButton.hidden = false;
-    downloadLink.hidden = true;
-    saveHint.textContent = isIOS
-      ? "iPhone: 'သိမ်းမည်' ကိုနှိပ်ပြီး ပေါ်လာသော menu မှ 'Save Video' ကို ရွေးပါ။"
-      : isAndroid
-        ? "Android: 'သိမ်းမည်' ကိုနှိပ်ရင် ဖုန်းရဲ့ Downloads ထဲ သိမ်းပါမယ်။ Files သို့မဟုတ် Gallery မှာ ရှာပါ။"
-        : "";
-    saveHint.hidden = !(isIOS || isAndroid);
-  } catch (e) {
-    // blob မရလျှင် (memory မလောက် စသည်) server link ကို အစားထိုးသုံး
-    resultVideo.src = url + "?inline=1";
-    resultVideo.hidden = false;
-    downloadButton.hidden = true;
-    downloadLink.href = url;
-    downloadLink.hidden = false;
-    saveHint.textContent = "ဗီဒီယိုကို ကြာကြာနှိပ်ပြီး Save လုပ်နိုင်ပါသည်။";
-    saveHint.hidden = false;
-  }
-}
-
-function directDownload() {
-  const a = document.createElement("a");
-  a.href = resultBlobUrl;
-  a.download = "soe-translated.mp4";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
-async function shareFile() {
-  if (navigator.canShare && navigator.canShare({ files: [resultFile] })) {
-    try {
-      await navigator.share({ files: [resultFile], title: "SOE AI TRANSLATOR" });
-      return true;
-    } catch (e) {
-      if (e && e.name === "AbortError") return true; // user ပယ်ဖျက်
+    /* ---------- Adsterra 300x250 banners ---------- */
+    function mountBannerFrames() {
+      const bannerHtml = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>body{margin:0;display:flex;align-items:center;justify-content:center;background:transparent}</style></head>
+<body>
+<script>atOptions={'key':'9c00a751d36bb3fd0fab385c7bd6777a','format':'iframe','height':250,'width':300,'params':{}};<\/script>
+<script data-cfasync="false" src="https://bancadeltempoidea.org/22/9c00a751d36bb3fd0fab385c7bd6777a"><\/script>
+</body></html>`;
+      document.querySelectorAll("iframe.ad-frame").forEach((f) => { f.srcdoc = bannerHtml; });
     }
-  }
-  return false;
-}
+    mountBannerFrames();
 
-downloadButton.addEventListener("click", async function () {
-  if (!resultFile) return;
+    /* ---------- Adsterra 320x50 banner ---------- */
+    (function mountStrip() {
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>body{margin:0;display:flex;align-items:center;justify-content:center;background:transparent}</style></head>
+<body>
+<script>atOptions={'key':'25a59dd98dca39119323e757d456edd6','format':'iframe','height':50,'width':320,'params':{}};<\/script>
+<script data-cfasync="false" src="https://bancadeltempoidea.org/22/25a59dd98dca39119323e757d456edd6"><\/script>
+</body></html>`;
+      document.querySelectorAll("iframe.ad-frame-320").forEach((f) => { f.srcdoc = html; });
+    })();
 
-  if (isIOS) {
-    // iPhone: Share sheet ဖြင့် Photos ထဲသိမ်း (Save Video)
-    if (await shareFile()) return;
-    directDownload();
-    saveHint.textContent = "မသိမ်းနိုင်ပါက အပေါ်က ဗီဒီယိုကို ကြာကြာနှိပ်ပြီး Save/Share ကို ရွေးပါ။";
-    saveHint.hidden = false;
-  } else {
-    // Android / Desktop: Downloads ထဲ တိုက်ရိုက်သိမ်း၊ မရမှ Share
-    directDownload();
-    setStatus(statusText, "ဒေါင်းလုဒ်စတင်ပါပြီ။ Downloads ထဲ ကြည့်ပါ။", "ok");
-    if (isAndroid) {
-      setTimeout(function () {
-        saveHint.textContent = "မသိမ်းဖြစ်ပါက ဗီဒီယိုကို ကြာကြာနှိပ်ပြီး 'Download video' ကို ရွေးပါ။";
-      }, 2500);
-    }
-  }
-});
+    /* ---------- Daily quota (ကြော်ငြာနှင့် မဆက်စပ်) ---------- */
+    const DAILY_FREE_LIMIT = 3;
+    const STORAGE_KEY = "soe_daily_quota_v1";
+    const todayKey = () => new Date().toISOString().slice(0, 10);
 
-translateButton.addEventListener("click", async function () {
-  const file = videoFile.files[0];
-  if (!file) {
-    setStatus(statusText, "အရင်ဆုံး Video ရွေးချယ်ပါ။", "error");
-    return;
-  }
-  if (file.size > 300 * 1024 * 1024) {
-    setStatus(statusText, "Video ဖိုင်က 300MB ထက် ကြီးနေပါသည်။", "error");
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append("video", file);
-  formData.append("sourceLanguage", $("sourceLanguage").value);
-  formData.append("targetLanguage", $("targetLanguage").value);
-  formData.append("voice", $("voice").value);
-
-  translateButton.disabled = true;
-  resultVideo.hidden = true;
-  downloadButton.hidden = true;
-  downloadLink.hidden = true;
-  saveHint.hidden = true;
-  progressWrap.hidden = false;
-  progressBar.style.width = "2%";
-  setStatus(statusText, "Server သို့ Video ပို့နေပါသည်...");
-
-  try {
-    const { jobId } = await uploadVideo(formData);
-    let failures = 0;
-
-    while (true) {
-      await sleep(3000);
-      let job;
+    function loadQuota() {
       try {
-        const r = await fetchWithTimeout(SERVER_URL + "/api/job/" + jobId, {}, 30000);
-        job = await r.json().catch(() => ({}));
-        if (r.status === 404) { const e = new Error(job.error || "အလုပ်ကို မတွေ့ပါ။"); e.fatal = true; throw e; }
-        if (!r.ok) throw new Error(job.error || "Status " + r.status);
-        failures = 0;
-      } catch (e) {
-        if (e.fatal || ++failures >= 10) throw e;
-        continue;
+        const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+        if (s.date === todayKey() && typeof s.remaining === "number") return s;
+      } catch (e) {}
+      const fresh = { date: todayKey(), remaining: DAILY_FREE_LIMIT };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh)); } catch (e) {}
+      return fresh;
+    }
+    function saveQuota(q) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(q)); } catch (e) {}
+      updateQuotaUI();
+    }
+    function updateQuotaUI() {
+      const q = loadQuota();
+      const el = document.getElementById("quotaCount");
+      el.textContent = `${q.remaining} ကြိမ်`;
+      el.style.color = q.remaining > 0 ? "var(--accent-2)" : "var(--danger)";
+    }
+    updateQuotaUI();
+
+    /* ---------- Tabs ---------- */
+    document.querySelectorAll(".tab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const tab = btn.dataset.tab;
+        document.getElementById("tab-video").classList.toggle("hidden", tab !== "video");
+        document.getElementById("tab-text").classList.toggle("hidden", tab !== "text");
+      });
+    });
+
+    /* ---------- Video ---------- */
+    const videoForm = document.getElementById("videoForm");
+    const videoBtn = document.getElementById("videoBtn");
+    const videoInput = document.getElementById("videoInput");
+    const videoProgressWrap = document.getElementById("videoProgressWrap");
+    const videoProgressBar = document.getElementById("videoProgressBar");
+    const videoStatusText = document.getElementById("videoStatusText");
+    const videoError = document.getElementById("videoError");
+    const videoResult = document.getElementById("videoResult");
+    const resultVideo = document.getElementById("resultVideo");
+    const downloadLink = document.getElementById("downloadLink");
+    const resultScript = document.getElementById("resultScript");
+    let pollTimer = null;
+
+    const showVideoError = (m) => { videoError.textContent = m; videoError.style.display = "block"; };
+    const clearVideoError = () => { videoError.textContent = ""; videoError.style.display = "none"; };
+
+    async function pollJob(jobId) {
+      try {
+        const res = await fetch(`${API_BASE}/api/job/${jobId}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "အလုပ်အခြေအနေ စစ်ဆေး၍ မရပါ။");
+
+        const pct = Number(data.progress || 0);
+        videoProgressBar.style.width = `${pct}%`;
+        videoStatusText.textContent = `${data.message || "လုပ်ဆောင်နေပါသည်..."} (${pct}%)`;
+
+        if (data.status === "error") {
+          clearInterval(pollTimer);
+          videoBtn.disabled = false;
+          showVideoError(data.error || "ဘာသာပြန် မအောင်မြင်ပါ။");
+          return;
+        }
+        if (data.status === "done") {
+          clearInterval(pollTimer);
+          videoBtn.disabled = false;
+          const q = loadQuota();
+          q.remaining = Math.max(0, q.remaining - 1);
+          saveQuota(q);
+          resultVideo.src = `${API_BASE}/api/download/${jobId}?inline=1`;
+          downloadLink.href = `${API_BASE}/api/download/${jobId}`;
+          resultScript.textContent = data.translatedText || "";
+          videoResult.style.display = "block";
+        }
+      } catch (err) {
+        clearInterval(pollTimer);
+        videoBtn.disabled = false;
+        showVideoError(err.message || "Network Error ဖြစ်နေပါသည်။");
       }
-
-      progressBar.style.width = (20 + (job.progress || 0) * 0.8) + "%";
-
-      if (job.status === "error") throw new Error(job.error || "ဘာသာပြန်မအောင်မြင်ပါ။");
-      if (job.status === "done") {
-        progressBar.style.width = "100%";
-        await prepareResult(SERVER_URL + "/api/download/" + jobId);
-        setStatus(statusText, job.message || "ပြီးစီးပါပြီ။", "ok");
-        break;
-      }
-      setStatus(statusText, job.message || "လုပ်ဆောင်နေပါသည်...");
     }
-  } catch (error) {
-    progressWrap.hidden = true;
-    setStatus(statusText, "မအောင်မြင်ပါ။ " + error.message, "error");
-  } finally {
-    translateButton.disabled = false;
-  }
-});
 
-/* ---------- TEXT TRANSLATE ---------- */
-const MAX_CHUNK = 450;
+    videoForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearVideoError();
+      videoResult.style.display = "none";
 
-function splitIntoChunks(text) {
-  const pieces = text.match(/[^.!?。！？။\n]+[.!?。！？။\n]*/g) || [text];
-  const chunks = [];
-  let current = "";
-
-  for (let piece of pieces) {
-    while (piece.length > MAX_CHUNK) {
-      if (current) { chunks.push(current); current = ""; }
-      chunks.push(piece.slice(0, MAX_CHUNK));
-      piece = piece.slice(MAX_CHUNK);
-    }
-    if ((current + piece).length > MAX_CHUNK) {
-      if (current) chunks.push(current);
-      current = piece;
-    } else {
-      current += piece;
-    }
-  }
-  if (current.trim()) chunks.push(current);
-  return chunks.map((c) => c.trim()).filter(Boolean);
-}
-
-async function translateChunk(chunk, source, target) {
-  const from = source === "auto" ? "Autodetect" : source;
-  const url = "https://api.mymemory.translated.net/get?q=" +
-    encodeURIComponent(chunk) + "&langpair=" + encodeURIComponent(from + "|" + (target === "zh" ? "zh-CN" : target));
-
-  const response = await fetchWithTimeout(url, {}, 20000);
-  if (!response.ok) throw new Error("Status " + response.status);
-
-  const data = await response.json();
-  const translated = data.responseData && data.responseData.translatedText;
-
-  if (data.responseStatus && Number(data.responseStatus) !== 200) {
-    throw new Error(data.responseDetails || "Translation service error");
-  }
-  if (!translated || /MYMEMORY WARNING/i.test(translated)) {
-    throw new Error("ယနေ့အတွက် အခမဲ့ ဘာသာပြန်ကန့်သတ်ချက် ပြည့်သွားပါပြီ။ နောက်မှ ပြန်စမ်းပါ။");
-  }
-  return translated;
-}
-
-const textTranslateButton = $("textTranslateButton");
-
-textTranslateButton.addEventListener("click", async function () {
-  const inputText = $("inputText").value.trim();
-  const sourceLanguage = $("textSourceLanguage").value;
-  const targetLanguage = $("textTargetLanguage").value;
-  const output = $("translatedText");
-  const textStatus = $("textStatus");
-
-  if (!inputText) {
-    setStatus(textStatus, "ဘာသာပြန်မည့်စာသား ထည့်ပါ။", "error");
-    return;
-  }
-  if (inputText.length > 5000) {
-    setStatus(textStatus, "စာသား အရှည်လွန်းပါသည်။ ၅၀၀၀ လုံးအောက် ထည့်ပါ။", "error");
-    return;
-  }
-
-  textTranslateButton.disabled = true;
-  output.value = "";
-  setStatus(textStatus, "AI ဘာသာပြန်နေပါသည်...");
-
-  try {
-    try {
-      const res = await fetchWithTimeout(SERVER_URL + "/api/text-translate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: inputText, sourceLanguage, targetLanguage })
-      }, 60000);
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.translatedText) {
-        output.value = data.translatedText;
-        setStatus(textStatus, "ဘာသာပြန်ပြီးပါပြီ။ (Gemini AI)", "ok");
+      if (loadQuota().remaining <= 0) {
+        showVideoError("ယနေ့ အခမဲ့ အကြိမ်ရေ ပြည့်သွားပါပြီ။ မနက်ဖြန် ပြန်လာပါ။ စာသား ဘာသာပြန်ခြင်းကိုတော့ အကန့်အသတ်မရှိ သုံးနိုင်ပါသည်။");
         return;
       }
-    } catch (e) { /* server မရရင် အောက်က အခမဲ့စနစ်သို့ */ }
+      const file = videoInput.files && videoInput.files[0];
+      if (!file) { showVideoError("ဗီဒီယိုဖိုင် အရင် ရွေးချယ်ပါ။"); return; }
 
-    setStatus(textStatus, "AI Server မရသဖြင့် အခြားစနစ်ဖြင့် ဘာသာပြန်နေပါသည်...");
-    const chunks = splitIntoChunks(inputText);
-    const results = [];
-    for (let i = 0; i < chunks.length; i++) {
-      if (chunks.length > 1) {
-        setStatus(textStatus, "ဘာသာပြန်နေပါသည်... (" + (i + 1) + "/" + chunks.length + ")");
+      if (pollTimer) clearInterval(pollTimer);
+      videoBtn.disabled = true;
+      videoProgressWrap.style.display = "block";
+      videoProgressBar.style.width = "2%";
+      videoStatusText.textContent = "Server သို့ ဗီဒီယိုတင်နေပါသည်... (2%)";
+
+      try {
+        const fd = new FormData();
+        fd.append("video", file);
+        fd.append("sourceLanguage", document.getElementById("sourceLang").value);
+        fd.append("targetLanguage", document.getElementById("targetLang").value);
+        fd.append("voice", document.getElementById("voiceSelect").value);
+
+        const res = await fetch(`${API_BASE}/api/translate`, { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok || !data.jobId) throw new Error(data.error || "ဗီဒီယို ဘာသာပြန်စတင်၍ မရပါ။");
+
+        pollTimer = setInterval(() => pollJob(data.jobId), 2000);
+        pollJob(data.jobId);
+      } catch (err) {
+        videoBtn.disabled = false;
+        showVideoError(err.message || "တင်သွင်းမှု မအောင်မြင်ပါ။");
       }
-      results.push(await translateChunk(chunks[i], sourceLanguage, targetLanguage));
-      output.value = results.join(" ");
-    }
-    setStatus(textStatus, "ဘာသာပြန်ပြီးပါပြီ။", "ok");
-  } catch (error) {
-    const msg = error.name === "AbortError" ? "အချိန်ကြာလွန်းသွားပါသည်။ ပြန်စမ်းပါ။" : error.message;
-    setStatus(textStatus, "Error: " + msg, "error");
-  } finally {
-    textTranslateButton.disabled = false;
-  }
-});
+    });
 
-$("copyButton").addEventListener("click", async function () {
-  const value = $("translatedText").value;
-  const textStatus = $("textStatus");
-  if (!value) {
-    setStatus(textStatus, "ကူးယူရန် ရလဒ် မရှိသေးပါ။", "error");
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(value);
-    setStatus(textStatus, "ကူးယူပြီးပါပြီ။", "ok");
-  } catch (e) {
-    $("translatedText").select();
-    setStatus(textStatus, "စာသားကို ရွေးပေးထားပါသည်၊ ကိုယ်တိုင် ကူးယူပါ။");
-  }
-});
+    /* ---------- Text ---------- */
+    const textForm = document.getElementById("textForm");
+    const textBtn = document.getElementById("textBtn");
+    const textError = document.getElementById("textError");
+    const textResult = document.getElementById("textResult");
+    const textWrap = document.getElementById("textWrap");
 
-/* ---------- service worker ---------- */
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", function () {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
-  });
-}
-</script>
+    textForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      textError.style.display = "none";
+      textWrap.classList.add("hidden");
+      textBtn.disabled = true;
+      textBtn.textContent = "ဘာသာပြန်နေပါသည်...";
+      try {
+        const res = await fetch(`${API_BASE}/api/text-translate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: document.getElementById("sourceText").value,
+            sourceLanguage: document.getElementById("textSourceLang").value,
+            targetLanguage: document.getElementById("textTargetLang").value
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "စာသား ဘာသာပြန် မအောင်မြင်ပါ။");
+        textResult.textContent = data.translatedText || "";
+        textWrap.classList.remove("hidden");
+      } catch (err) {
+        textError.textContent = err.message || "Error ဖြစ်သွားပါသည်။";
+        textError.style.display = "block";
+      } finally {
+        textBtn.disabled = false;
+        textBtn.textContent = "စာသား ဘာသာပြန်မည်";
+      }
+    });
 
+    document.getElementById("copyBtn").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(textResult.textContent);
+        const b = document.getElementById("copyBtn");
+        b.textContent = "✅ ကူးပြီးပါပြီ";
+        setTimeout(() => (b.textContent = "📋 ကူးယူမည်"), 1500);
+      } catch (e) {}
+    });
+  </script>
 </body>
 </html>
