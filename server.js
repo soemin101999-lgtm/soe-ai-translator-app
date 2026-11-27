@@ -144,21 +144,16 @@ function decodeAudio(buf, mime = "") {
   return { pcm: buf, rate };
 }
 
-function buildGentleTtsInput(text, tag = "M") {
-  const styleHint =
-    tag === "C"
-      ? "Speak softly, gently, and naturally like a sweet child: "
-      : tag === "F"
-      ? "Speak warmly, softly, and naturally: "
-      : "Speak calmly, smoothly, and naturally: ";
-  return `${styleHint}${text}`;
+// အင်္ဂလိပ် ညွှန်ကြားချက်ကို စာထဲ ထည့်ရင် Gemini က အသံထွက်ဖတ်မိတတ်လို့ စာသားသက်သက်ပဲ ပို့သည်
+function buildGentleTtsInput(text) {
+  return text;
 }
 
 let workingTtsModel = null;
 async function ttsChunk(text, voiceName, tag = "M") {
   const order = [...new Set([workingTtsModel, ...TTS_MODELS].filter(Boolean))];
   const errors = [];
-  const spokenText = buildGentleTtsInput(text, tag);
+  const spokenText = buildGentleTtsInput(text);
   for (const model of order) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
