@@ -17,10 +17,25 @@ app.set("trust proxy", 1);
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-const apiKey = process.env.GEMINI_API_KEY;
+const geminiKeys = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || "")
+  .split(",")
+  .map((k) => k.trim())
+  .filter(Boolean);
 const groqKey = process.env.GROQ_API_KEY;
 const APP_SECRET = process.env.APP_SECRET || "";
-const ai = apiKey ? new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "v1beta" } }) : null;
+
+let keyIndex = 0;
+function getAiClient() {
+  if (!geminiKeys.length) return null;
+  const key = geminiKeys[keyIndex % geminiKeys.length];
+  return new GoogleGenAI({ apiKey: key, httpOptions: { apiVersion: "v1beta" } });
+}
+function rotateGeminiKey() {
+  if (geminiKeys.length > 1) {
+    keyIndex = (keyIndex + 1) % geminiKeys.length;
+    console.log(`[gemini] rotated to key #${(keyIndex % geminiKeys.length) + 1}`);
+  }
+}
 
 /* ---------------- settings ---------------- */
 const TEXT_MODELS = [
@@ -67,7 +82,6 @@ const TTS_CONCURRENCY = 2;
 const JOB_CONCURRENCY = Number(process.env.JOB_CONCURRENCY) || 1;
 const RATE_LIMIT_PER_HOUR = Number(process.env.RATE_LIMIT_PER_HOUR) || 30;
 const TTS_PRIORITY = (process.env.TTS_PRIORITY || "edge").toLowerCase();
-// segment တိုတွေကို ကပ်ပေါင်းမလား (ပေါင်းရင် ယောက်ျား/မိန်းမ ရောနိုင်လို့ default ပိတ်)
 const MERGE_SHORT = process.env.MERGE_SHORT === "true";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -166,7 +180,13 @@ app.get("/", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
-  res.json({ ok: true, hasApiKey: Boolean(apiKey), hasGroqKey: Boolean(groqKey), hasFfmpeg: Boolean(ffmpegPath) });
+  res.json({
+    ok: true,
+    hasApiKey: geminiKeys.length > 0,
+    geminiKeyCount: geminiKeys.length,
+    hasGroqKey: Boolean(groqKey),
+    hasFfmpeg: Boolean(ffmpegPath)
+  });
 });
 
 /* ---------------- Gemini helpers ---------------- */
@@ -183,36 +203,51 @@ const modelCooldown = new Map();
 function coolDown(model, err) {
   const m = String(err?.message || err);
   let ms = 0;
-  if (/PerDay|per day/i.test(m)) ms = 60 * 60 * 1000;
-  else if (/429|RESOURCE_EXHAUSTED/i.test(m)) ms = 2 * 60 * 1000;
-  else if (/503|UNAVAILABLE|abort|timeout|timed out/i.test(m)) ms = 2 * 60 * 1000;
-  else if (/404|NOT_FOUND|no longer available/i.test(m)) ms = 6 * 60 * 60 * 1000;
+  if (/PerDay|per day/i.test(m)) {
+    ms = 60 * 60 * 1000;
+    rotateGeminiKey();
+  } else if (/429|RESOURCE_EXHAUSTED/i.test(m)) {
+    ms = 2 * 60 * 1000;
+    rotateGeminiKey();
+  } else if (/503|UNAVAILABLE|abort|timeout|timed out/i.test(m)) {
+    ms = 2 * 60 * 1000;
+  } else if (/404|NOT_FOUND|no longer available/i.test(m)) {
+    ms = 6 * 60 * 60 * 1000;
+  }
   if (ms) modelCooldown.set(model, Date.now() + ms);
 }
 
 async function generateText(contents) {
-  if (!ai) throw new Error("GEMINI_API_KEY မရှိပါ။");
+  if (!geminiKeys.length) throw new Error("GEMINI_API_KEY မရှိပါ။");
   let order = [...new Set([workingTextModel, ...TEXT_MODELS].filter(Boolean))];
   const active = order.filter((m) => (modelCooldown.get(m) || 0) <= Date.now());
   if (active.length) order = active;
   const errors = [];
   for (const model of order) {
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents,
-        config: { abortSignal: AbortSignal.timeout(GEMINI_TIMEOUT_MS) }
-      });
-      const text = (response.text || "").trim();
-      if (text) {
-        workingTextModel = model;
-        return text;
+    for (let kTry = 0; kTry < Math.max(1, geminiKeys.length); kTry++) {
+      const client = getAiClient();
+      try {
+        const response = await client.models.generateContent({
+          model,
+          contents,
+          config: { abortSignal: AbortSignal.timeout(GEMINI_TIMEOUT_MS) }
+        });
+        const text = (response.text || "").trim();
+        if (text) {
+          workingTextModel = model;
+          return text;
+        }
+        errors.push(`${model}: ရလဒ်အလွတ်`);
+        break;
+      } catch (err) {
+        console.error(`Model ${model} failed:`, err.message);
+        coolDown(model, err);
+        if (/429|RESOURCE_EXHAUSTED|PerDay|per day/i.test(String(err?.message || err)) && geminiKeys.length > 1) {
+          continue;
+        }
+        errors.push(`${model}: ${shortError(err)}`);
+        break;
       }
-      errors.push(`${model}: ရလဒ်အလွတ်`);
-    } catch (err) {
-      console.error(`Model ${model} failed:`, err.message);
-      coolDown(model, err);
-      errors.push(`${model}: ${shortError(err)}`);
     }
   }
   throw new Error("Gemini မအောင်မြင်ပါ။ " + (errors.join(" | ") || "model မရပါ။"));
@@ -238,13 +273,15 @@ function decodeAudio(buf, mime = "") {
 
 let workingTtsModel = null;
 async function ttsChunk(text, voiceName, style = "") {
+  if (!geminiKeys.length) throw new Error("GEMINI_API_KEY မရှိပါ။");
   const spokenText = style ? `${style}: ${text}` : text;
   const order = [...new Set([workingTtsModel, ...TTS_MODELS].filter(Boolean))];
   const errors = [];
   for (const model of order) {
     for (let attempt = 0; attempt < 2; attempt++) {
+      const client = getAiClient();
       try {
-        const response = await ai.models.generateContent({
+        const response = await client.models.generateContent({
           model,
           contents: [{ role: "user", parts: [{ text: spokenText }] }],
           config: {
@@ -260,6 +297,9 @@ async function ttsChunk(text, voiceName, style = "") {
         return decodeAudio(Buffer.from(part.inlineData.data, "base64"), part.inlineData.mimeType || "");
       } catch (err) {
         console.error(`TTS ${model} attempt ${attempt + 1} failed:`, err.message);
+        if (/429|RESOURCE_EXHAUSTED|PerDay|per day/i.test(String(err?.message || err))) {
+          rotateGeminiKey();
+        }
         if (attempt === 1) errors.push(`${model}: ${shortError(err)}`);
         else await sleep(2000);
       }
@@ -277,7 +317,6 @@ async function edgeTtsChunk(text, profile, dir, idx, target) {
       voices[profile.edge] || voices.male,
       OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS
     );
-    // prosody ကို library က ကိုယ်တိုင် ထည့်ပေးသည် (tag စာသား အသံထွက်မနေစေရန်)
     const { audioStream } = await tts.toStream(text, { rate: profile.rate, pitch: profile.pitch });
     const bufs = [];
     await new Promise((resolve, reject) => {
@@ -327,7 +366,7 @@ function geminiStyle(profile) {
 async function synthChunk(text, voiceKey, dir, idx, target, tag = "B") {
   const profile = profileFor(voiceKey, tag);
   const gem = () => ttsChunk(text, profile.gem, geminiStyle(profile));
-  if (TTS_PRIORITY === "gemini" && ai) {
+  if (TTS_PRIORITY === "gemini" && geminiKeys.length) {
     try {
       return await gem();
     } catch (err) {
@@ -339,7 +378,7 @@ async function synthChunk(text, voiceKey, dir, idx, target, tag = "B") {
     return await edgeWithRetry(text, profile, dir, idx, target);
   } catch (err) {
     console.error("Edge TTS failed twice, falling back to Gemini:", err.message);
-    if (!ai) throw err;
+    if (!geminiKeys.length) throw err;
     return await gem();
   }
 }
@@ -426,7 +465,11 @@ function parseTimedSegments(scriptText, duration, fallbackVoice = "male") {
 
 function detectSpeech(audioPath, duration) {
   return new Promise((resolve, reject) => {
-    const p = spawn(ffmpegPath, ["-hide_banner", "-nostats", "-i", audioPath, "-af", "silencedetect=noise=-35dB:d=0.35", "-f", "null", "-"]);
+    const p = spawn(ffmpegPath, [
+      "-hide_banner", "-nostats", "-i", audioPath,
+      "-af", "silencedetect=noise=-28dB:d=0.4",
+      "-f", "null", "-"
+    ]);
     let err = "";
     p.stderr.on("data", (d) => { err += d; if (err.length > 200000) err = err.slice(-200000); });
     p.on("error", reject);
@@ -434,7 +477,7 @@ function detectSpeech(audioPath, duration) {
       const starts = [...err.matchAll(/silence_start:\s*(-?[\d.]+)/g)].map((m) => Number(m[1]));
       const ends = [...err.matchAll(/silence_end:\s*([\d.]+)/g)].map((m) => Number(m[1]));
       let speechStart = 0;
-      if (starts.length && starts[0] < 0.1 && ends.length) speechStart = ends[0];
+      if (starts.length && starts[0] <= 0.15 && ends.length) speechStart = ends[0];
       let speechEnd = duration;
       if (starts.length > ends.length) speechEnd = Math.max(speechStart, starts[starts.length - 1]);
       resolve({ speechStart, speechEnd, onsets: ends });
@@ -513,7 +556,6 @@ async function tempoPcm(pcm, rate, t, dir, idx) {
   return fs.readFileSync(outF);
 }
 
-// ဝါကျတစ်ခုချင်းကို start နေရာမှာချပြီး နောက်ဝါကျမစခင်အထိ ဆက်ပြောခွင့်ပေးသည်
 async function buildTimeline(parts, timed, duration, rate, dir) {
   const bytesPerSec = rate * 2;
   const placed = [];
@@ -574,7 +616,7 @@ function parseSpeakerSegments(scriptText, fallbackVoice = "male") {
 
 /* ---------------- diagnostic ---------------- */
 app.get("/api/test-gemini", async (req, res) => {
-  if (!ai) return res.status(500).json({ ok: false, error: "GEMINI_API_KEY မရှိပါ။" });
+  if (!geminiKeys.length) return res.status(500).json({ ok: false, error: "GEMINI_API_KEY မရှိပါ။" });
   try {
     const text = await generateText("Reply with the single word: OK");
     res.json({ ok: true, textModel: workingTextModel, reply: text.slice(0, 40) });
@@ -590,7 +632,7 @@ app.post("/api/text-translate", rateLimit, async (req, res) => {
     if (!text || !String(text).trim()) {
       return res.status(400).json({ error: "ဘာသာပြန်မည့်စာသား လိုအပ်ပါသည်။" });
     }
-    if (!ai) {
+    if (!geminiKeys.length) {
       return res.status(500).json({ error: "Render Environment ထဲတွင် GEMINI_API_KEY မရှိသေးပါ။" });
     }
     const prompt =
@@ -681,7 +723,6 @@ async function myMemoryTranslate(text, sourceLanguage, targetLanguage = "my") {
   return out.join(" ");
 }
 
-// return: [{ tag, text }]
 async function translateSegments(segs, sourceLanguage, targetLanguage, audioBase64 = null, defaultTag = "B") {
   const cps = CHARS_PER_SEC[targetLanguage] || 11;
   const items = segs.map((s, i) => ({
@@ -744,7 +785,7 @@ async function whisperPath(audioPath, opts, job) {
   if (MERGE_SHORT) segs = mergeShortSegments(segs);
   setJob(job, { progress: 28, message: "အသံအမျိုးအစား ခွဲပြီး ဘာသာပြန်နေပါသည်..." });
   const defaultTag = opts.voice === "female" ? "G" : "B";
-  const audioBase64 = ai ? fs.readFileSync(audioPath).toString("base64") : null;
+  const audioBase64 = geminiKeys.length ? fs.readFileSync(audioPath).toString("base64") : null;
   const translated = await translateSegments(segs, opts.sourceLanguage, opts.targetLanguage, audioBase64, defaultTag);
   return segs.map((s, i) => ({
     tag: translated[i].tag,
@@ -755,7 +796,6 @@ async function whisperPath(audioPath, opts, job) {
   }));
 }
 
-/* ---- Gemini audio: Whisper မရရင် သုံး ---- */
 async function geminiPath(audioBase64, opts, job, duration) {
   setJob(job, {
     progress: 20,
@@ -828,7 +868,7 @@ async function processJob(job, file, opts) {
     }
 
     if (!timed) {
-      if (!ai) throw new Error("Whisper မအောင်မြင်ပါ၊ GEMINI_API_KEY လည်း မရှိပါ။");
+      if (!geminiKeys.length) throw new Error("Whisper မအောင်မြင်ပါ၊ GEMINI_API_KEY လည်း မရှိပါ။");
       const audioBase64 = fs.readFileSync(audioPath).toString("base64");
       const script = await geminiPath(audioBase64, opts, job, info.duration);
       displayText = String(script)
@@ -934,7 +974,7 @@ app.post("/api/translate", rateLimit, upload.single("video"), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "Video ဖိုင် မပါပါ။" });
   }
-  if (!ai && !groqKey) {
+  if (!geminiKeys.length && !groqKey) {
     safeRm(req.file.path);
     return res.status(500).json({ error: "Render Environment ထဲတွင် GROQ_API_KEY သို့မဟုတ် GEMINI_API_KEY မရှိသေးပါ။" });
   }
@@ -1004,6 +1044,8 @@ app.get("/api/download/:id", (req, res) => {
   if (req.query.inline) {
     return res.type("video/mp4").sendFile(job.outPath);
   }
+  res.setHeader("Content-Type", "video/mp4");
+  res.setHeader("Content-Disposition", 'attachment; filename="soe-translated.mp4"');
   return res.download(job.outPath, "soe-translated.mp4");
 });
 
