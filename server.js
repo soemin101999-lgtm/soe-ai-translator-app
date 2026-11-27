@@ -93,7 +93,7 @@ function coolDown(model, err) {
   let ms = 0;
   if (/PerDay|per day/i.test(m)) ms = 60 * 60 * 1000;
   else if (/429|RESOURCE_EXHAUSTED/i.test(m)) ms = 2 * 60 * 1000;
-  else if (/503|UNAVAILABLE|abort|timeout|timed out/i.test(m)) ms = 2 * 60 * 1000; // အလုပ်များ/နှေးနေတဲ့ model ကို ခဏကျော်
+  else if (/503|UNAVAILABLE|abort|timeout|timed out/i.test(m)) ms = 2 * 60 * 1000;
   else if (/404|NOT_FOUND|no longer available/i.test(m)) ms = 6 * 60 * 60 * 1000;
   if (ms) modelCooldown.set(model, Date.now() + ms);
 }
@@ -144,7 +144,6 @@ function decodeAudio(buf, mime = "") {
   return { pcm: buf, rate };
 }
 
-// အင်္ဂလိပ် ညွှန်ကြားချက်ကို စာထဲ ထည့်ရင် Gemini က အသံထွက်ဖတ်မိတတ်လို့ စာသားသက်သက်ပဲ ပို့သည်
 function buildGentleTtsInput(text) {
   return text;
 }
@@ -191,8 +190,12 @@ function escapeXml(t) {
 async function edgeTtsChunk(text, voiceKey, dir, idx, target) {
   const tts = new MsEdgeTTS();
   const edgeVoiceKey = voiceKey === "female" ? "female" : "male";
-  await tts.setMetadata(getTarget(target).edge[edgeVoiceKey] || getTarget(target).edge.male, OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS);
-  const { audioStream } = await tts.toStream(escapeXml(text));
+  await tts.setMetadata(
+    getTarget(target).edge[edgeVoiceKey] || getTarget(target).edge.male,
+    OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS
+  );
+  const ssmlText = `<prosody rate="+10%">${escapeXml(text)}</prosody>`;
+  const { audioStream } = await tts.toStream(ssmlText);
   const bufs = [];
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("Edge TTS အချိန်ကြာလွန်းသည်")), 40000);
@@ -211,7 +214,6 @@ async function edgeTtsChunk(text, voiceKey, dir, idx, target) {
   return { pcm: fs.readFileSync(outFile), rate: TTS_SAMPLE_RATE };
 }
 
-// Edge ကို ၂ ကြိမ်စမ်း (ပထမကျရင် ပြန်စမ်း)
 async function edgeWithRetry(text, voiceKey, dir, idx, target) {
   let lastErr;
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -230,7 +232,6 @@ function geminiVoiceFor(voiceKey, tag) {
   return tag === "C" ? VOICES.child : VOICES[voiceKey] || VOICES.male;
 }
 
-// Edge (အခမဲ့) ကို အရင်၊ ၂ ကြိမ်ကျမှ Gemini (TTS_PRIORITY=gemini ဆိုရင် ပြောင်းပြန်)
 async function synthChunk(text, voiceKey, dir, idx, target, tag = "M") {
   if (TTS_PRIORITY === "gemini" && ai) {
     try {
@@ -272,7 +273,6 @@ function splitForTts(text, max = 450) {
   return chunks;
 }
 
-/* [M], [F], [C] Tag အလိုက် အသံခွဲခြင်း — အသံတူ ဆက်တိုက်စာကြောင်းတွေကို ပေါင်းပြီး TTS ခေါ်ရတဲ့အကြိမ် လျှော့သည် */
 function parseSpeakerSegments(scriptText, fallbackVoice = "male") {
   const defaultVoice = fallbackVoice === "female" ? "female" : "male";
   const lines = String(scriptText || "")
@@ -298,7 +298,6 @@ function parseSpeakerSegments(scriptText, fallbackVoice = "male") {
     });
   }
 
-  // အသံတူ ဆက်တိုက်လာရင် ၄၅၀ လုံးအထိ ပေါင်း
   const merged = [];
   for (const s of raw) {
     const last = merged[merged.length - 1];
@@ -309,7 +308,6 @@ function parseSpeakerSegments(scriptText, fallbackVoice = "male") {
     }
   }
 
-  // ၄၅၀ လုံးထက်ရှည်တာကို ခွဲ
   const segments = [];
   for (const s of merged) {
     for (const part of splitForTts(s.text, 450)) {
@@ -403,7 +401,6 @@ function safeRm(p) {
   if (p) fs.rm(p, { recursive: true, force: true }, () => {});
 }
 
-/* ---------------- အခမဲ့ စကားနားထောင်ခြင်း (Groq Whisper) ---------------- */
 async function groqTranscribe(filePath, sourceLanguage) {
   const form = new FormData();
   form.append("file", new Blob([fs.readFileSync(filePath)], { type: "audio/mpeg" }), "audio.mp3");
@@ -454,35 +451,44 @@ async function translateTranscript(transcript, sourceLanguage, targetLanguage = 
 }
 
 async function speechToBurmese(audioPath, audioBase64, opts, job) {
-  if (groqKey) {
-    try {
-      setJob(job, { progress: 20, message: "AI က စကားကို နားထောင်နေပါသည်..." });
-      const transcript = await groqTranscribe(audioPath, opts.sourceLanguage);
-      if (transcript.length < 2) {
-        throw Object.assign(new Error("ဗီဒီယိုထဲတွင် စကားပြောသံ မတွေ့ပါ။"), { noSpeech: true });
-      }
-      setJob(job, { progress: 28, message: "ယောက်ျား / မိန်းကလေး / ကလေး အသံများ ခွဲခြားဘာသာပြန်နေပါသည်..." });
-      return await translateTranscript(transcript, opts.sourceLanguage, opts.targetLanguage);
-    } catch (err) {
-      if (err.noSpeech) throw err;
-      console.error("Groq path failed, falling back to Gemini audio:", err.message);
-    }
-  }
-  setJob(job, { progress: 20, message: "ယောက်ျား၊ မိန်းကလေး၊ ကလေး အသံများကို ခွဲခြားဘာသာပြန်နေပါသည်..." });
+  setJob(job, {
+    progress: 20,
+    message: "ယောက်ျား၊ မိန်းကလေး၊ ကလေး အသံများကို နားထောင်ပြီး ခွဲခြားဘာသာပြန်နေပါသည်..."
+  });
+
   const prompt =
-    `Listen carefully to this audio (spoken language: ${languageLabel(opts.sourceLanguage)}). ` +
-    `The audio may contain male voices, female voices, and/or child voices. ` +
-    `Translate everything that is spoken into natural, soft, and clear ${getTarget(opts.targetLanguage).label}, suitable for smooth voice narration. ` +
-    `Prefix each line with [M] for male speaker, [F] for female speaker, or [C] for child speaker based on the voice you hear. ` +
-    `Write one sentence per line. Return ONLY the tagged ${getTarget(opts.targetLanguage).label} narration text, with no explanations, timestamps or notes. ` +
+    `Listen carefully to the actual voices in this audio (spoken language: ${languageLabel(opts.sourceLanguage)}). ` +
+    `Identify who is speaking each line by voice pitch and tone: ` +
+    `use [M] for a male voice, [F] for a female voice, and [C] for a child voice. ` +
+    `Even if there is only one female voice or mixed male and female voices, mark female-spoken lines clearly with [F]. ` +
+    `Translate everything spoken into natural, clear ${getTarget(opts.targetLanguage).label} suitable for voice dubbing. ` +
+    `Write one sentence per line. Return ONLY the tagged lines with no explanations or timestamps. ` +
     `If there is no speech, return exactly: NO_SPEECH`;
-  const text = await generateText([
-    { role: "user", parts: [{ inlineData: { mimeType: "audio/mp3", data: audioBase64 } }, { text: prompt }] }
-  ]);
-  if (/^NO_SPEECH$/i.test(text.trim())) {
-    throw new Error("ဗီဒီယိုထဲတွင် စကားပြောသံ မတွေ့ပါ။");
+
+  try {
+    const text = await generateText([
+      {
+        role: "user",
+        parts: [
+          { inlineData: { mimeType: "audio/mp3", data: audioBase64 } },
+          { text: prompt }
+        ]
+      }
+    ]);
+    if (/^NO_SPEECH$/i.test(text.trim())) {
+      throw new Error("ဗီဒီယိုထဲတွင် စကားပြောသံ မတွေ့ပါ။");
+    }
+    return text;
+  } catch (err) {
+    if (!groqKey) throw err;
+    console.error("Gemini audio failed, falling back to Groq:", err.message);
+    setJob(job, { progress: 25, message: "စကားကို နားထောင်ပြီး ဘာသာပြန်နေပါသည်..." });
+    const transcript = await groqTranscribe(audioPath, opts.sourceLanguage);
+    if (transcript.length < 2) {
+      throw new Error("ဗီဒီယိုထဲတွင် စကားပြောသံ မတွေ့ပါ။");
+    }
+    return await translateTranscript(transcript, opts.sourceLanguage, opts.targetLanguage);
   }
-  return text;
 }
 
 async function processJob(job, file, opts) {
@@ -498,17 +504,14 @@ async function processJob(job, file, opts) {
       throw new Error("ဗီဒီယိုက အရှည်လွန်းပါသည်။ ၇ မိနစ်အောက် သုံးပါ။");
     }
 
-    // 1) အသံထုတ်
     setJob(job, { progress: 8, message: "ဗီဒီယိုထဲက အသံကို ခွဲထုတ်နေပါသည်..." });
     const audioPath = path.join(dir, "audio.mp3");
     await runFfmpeg(["-i", file.path, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", audioPath]);
     const audioBase64 = fs.readFileSync(audioPath).toString("base64");
 
-    // 2) စကားနားထောင်ပြီး ဘာသာပြန်
     const burmese = await speechToBurmese(audioPath, audioBase64, opts, job);
     lap("speech→translated");
 
-    // 3) [M], [F], [C] အလိုက် အသံဖန်တီး
     const segments = parseSpeakerSegments(burmese, opts.voice);
     if (!segments.length) {
       throw new Error("ဘာသာပြန်စာသားမှ အသံဖန်တီးရန် စာကြောင်း မတွေ့ပါ။");
@@ -541,7 +544,6 @@ async function processJob(job, file, opts) {
     fs.writeFileSync(pcmPath, pcm);
     await runFfmpeg(["-f", "s16le", "-ar", String(ttsRate), "-ac", "1", "-i", pcmPath, ttsWav]);
 
-    // 4) အသံနဲ့ ဗီဒီယိုကို ပိုနူးညံ့ချောမွေ့အောင် ပေါင်း
     setJob(job, { progress: 85, message: "အသံအသစ်ကို ဗီဒီယိုနဲ့ ညှိပြီး ပေါင်းနေပါသည်..." });
     const ttsDuration = pcm.length / (ttsRate * 2);
     let tempo = ttsDuration / info.duration;
@@ -549,7 +551,6 @@ async function processJob(job, file, opts) {
     let tempoFilter = "anull";
     if (tempo > 1.02) {
       if (tempo > MAX_TEMPO) {
-        // အသံက ဗီဒီယိုထက် ရှည်လွန်းလို့ အမြန်ညှိပြီးတောင် နောက်ဆုံးပိုင်း ဖြတ်ခံရမယ်
         note = " (အသံက ဗီဒီယိုထက် ရှည်လွန်းလို့ နောက်ဆုံးပိုင်း အနည်းငယ် ဖြတ်ခံရပါသည်)";
         tempo = MAX_TEMPO;
       } else {
