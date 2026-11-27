@@ -525,6 +525,41 @@
       videoResult.style.display = "block";
     }
 
+    downloadLink.addEventListener("click", async (e) => {
+      const url = downloadLink.href;
+      if (!url || url === "#") return;
+
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (!isIOS) return;
+
+      e.preventDefault();
+      const oldText = downloadLink.textContent;
+      downloadLink.textContent = "⏳ ဒေါင်းလုပ် ပြင်ဆင်နေပါသည်...";
+
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("ဖိုင်ရယူ၍ မရပါ။");
+        const blob = await res.blob();
+        const mp4Blob = new Blob([blob], { type: "video/mp4" });
+        const file = new File([mp4Blob], "soe-translated.mp4", { type: "video/mp4" });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: "SOE AI TRANSLATOR"
+          });
+        } else {
+          const blobUrl = URL.createObjectURL(mp4Blob);
+          window.open(blobUrl, "_blank", "noopener");
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+        }
+      } catch (err) {
+        window.open(url, "_blank", "noopener");
+      } finally {
+        downloadLink.textContent = oldText;
+      }
+    });
+
     async function pollJob(jobId) {
       try {
         const res = await fetch(`${API_BASE}/api/job/${jobId}`);
