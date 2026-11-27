@@ -244,7 +244,7 @@
       <div id="videoResult" class="result-box">
         <video id="resultVideo" controls playsinline></video>
         <div class="actions">
-          <a id="downloadLink" class="download-btn" href="#" download="soe-translated.mp4">ဗီဒီယို Download ဆွဲရန်</a>
+          <a id="downloadLink" class="download-btn" href="#" download="soe-translated.mp4" rel="noopener">ဗီဒီယို Download ဆွဲရန်</a>
           <button id="copyVideoScriptBtn" type="button" class="copy-btn" style="margin-top:0;">📋 စာသားကူးယူမည်</button>
         </div>
 
@@ -420,7 +420,7 @@
       rewardHint.textContent = `ကြော်ငြာကို ${left} စက္ကန့် စောင့်ပါ...`;
       clearInterval(rewardTimer);
       rewardTimer = setInterval(() => {
-        if (document.hidden) return; // Tab ပြောင်းသွားရင် ခဏရပ်ထားမည်
+        if (document.hidden) return;
         left -= 1;
         if (left > 0) {
           rewardHint.textContent = `ကြော်ငြာကို ${left} စက္ကန့် စောင့်ပါ...`;
@@ -497,6 +497,19 @@
       videoError.style.display = "none";
     };
 
+    function bindVideoResult(jobId, translatedText) {
+      const cleanId = encodeURIComponent(jobId);
+      resultVideo.src = `${API_BASE}/api/download/${cleanId}?inline=1`;
+      resultVideo.load();
+
+      downloadLink.href = `${API_BASE}/api/download/${cleanId}`;
+      downloadLink.setAttribute("download", "soe-translated.mp4");
+      downloadLink.setAttribute("rel", "noopener");
+
+      resultScript.textContent = translatedText || "";
+      videoResult.style.display = "block";
+    }
+
     async function pollJob(jobId) {
       try {
         const res = await fetch(`${API_BASE}/api/job/${jobId}`);
@@ -522,10 +535,7 @@
           const q = loadQuota();
           q.remaining = Math.max(0, q.remaining - 1);
           saveQuota(q);
-          resultVideo.src = `${API_BASE}/api/download/${jobId}?inline=1`;
-          downloadLink.href = `${API_BASE}/api/download/${jobId}`;
-          resultScript.textContent = data.translatedText || "";
-          videoResult.style.display = "block";
+          bindVideoResult(jobId, data.translatedText);
         }
       } catch (err) {
         clearInterval(pollTimer);
