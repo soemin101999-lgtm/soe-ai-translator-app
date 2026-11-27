@@ -1,4 +1,4 @@
-import express from "express";
+Import express from "express";
 import cors from "cors";
 import multer from "multer";
 import { GoogleGenAI } from "@google/genai";
@@ -50,7 +50,8 @@ const VOICES = { male: "Charon", female: "Kore", child: "Puck" };
 const MAX_VIDEO_SECONDS = 7 * 60;
 const MAX_UPLOAD_BYTES = 300 * 1024 * 1024;
 const TTS_SAMPLE_RATE = 24000;
-const MAX_TEMPO = 1.3;                 // အသံမပျက်စေဘဲ အများဆုံး မြန်နိုင်သည့်နှုန်း
+// အသံ အများဆုံး မြန်နိုင်သည့်နှုန်း (Render မှာ MAX_TEMPO ထည့်ပြီး ပြောင်းလို့ရသည်)
+const MAX_TEMPO = Number(process.env.MAX_TEMPO) || 1.3;
 const GEMINI_TIMEOUT_MS = 90 * 1000;   // Gemini တစ်ခါခေါ်တာ ၉၀ စက္ကန့်ထက် မကြာစေရ
 const TTS_CONCURRENCY = 2;             // Edge TTS တည်ငြိမ်စေရန်
 // TTS_PRIORITY=gemini ထားရင် Gemini အသံကို အရင်သုံး (ပိုသဘာဝကျ၊ ဒါပေမဲ့ quota နည်း)
@@ -441,6 +442,7 @@ async function translateTranscript(transcript, sourceLanguage, targetLanguage = 
   const prompt =
     `Translate the following ${languageLabel(sourceLanguage)} transcript into natural, soft, and clear ${getTarget(targetLanguage).label}, ` +
     `suitable for smooth voice narration. Prefix each sentence line with [M], [F], or [C] if speaker gender/age is clear from context. ` +
+    `TIMING RULE: keep the translation short and natural for speaking, with simple words and no filler, so the narration is not longer than the original speech. ` +
     `Write one sentence per line. Return ONLY the ${getTarget(targetLanguage).label} text with no explanations or notes:\n\n${transcript}`;
   try {
     return await generateText(prompt);
@@ -463,6 +465,7 @@ async function speechToBurmese(audioPath, audioBase64, opts, job) {
     `Even if there is only one female voice or mixed male and female voices, mark female-spoken lines clearly with [F]. ` +
     `Translate everything spoken into natural, clear ${getTarget(opts.targetLanguage).label} suitable for voice dubbing. ` +
     `Write one sentence per line. Return ONLY the tagged lines with no explanations or timestamps. ` +
+    `TIMING RULE: the dubbed speech must fit the original video length (about ${Math.round(opts.duration || 0)} seconds). Keep the translation short and natural for speaking, with simple words and no filler. Never make a line longer than the original speech. ` +
     `If there is no speech, return exactly: NO_SPEECH`;
 
   try {
@@ -509,7 +512,7 @@ async function processJob(job, file, opts) {
     await runFfmpeg(["-i", file.path, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", audioPath]);
     const audioBase64 = fs.readFileSync(audioPath).toString("base64");
 
-    const burmese = await speechToBurmese(audioPath, audioBase64, opts, job);
+    const burmese = await speechToBurmese(audioPath, audioBase64, { ...opts, duration: info.duration }, job);
     lap("speech→translated");
 
     const segments = parseSpeakerSegments(burmese, opts.voice);
