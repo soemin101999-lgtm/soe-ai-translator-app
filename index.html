@@ -43,6 +43,12 @@
       color: #052e16; font-weight: 700; font-size: 0.95rem; cursor: pointer;
     }
 
+    .reward-btn {
+      display: none; width: 100%; padding: 12px; margin-bottom: 14px;
+      border: 0; border-radius: 10px; background: #f59e0b;
+      color: #1c1003; font-weight: 700; font-size: 0.95rem; cursor: pointer;
+    }
+
     .tabs {
       display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
       background: var(--card-2); padding: 6px; border-radius: 12px;
@@ -71,6 +77,7 @@
     }
     textarea { min-height: 120px; resize: vertical; }
     .file-box { margin-bottom: 14px; }
+    .file-info { font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
     .primary-btn {
       width: 100%; padding: 12px 16px; border: none; border-radius: 10px;
       background: var(--accent); color: #06131f; font-weight: 700;
@@ -89,6 +96,7 @@
       transition: width 0.3s ease;
     }
     .status-text { font-size: 0.9rem; margin-top: 6px; }
+    .cold-hint { font-size: 0.82rem; color: #fbbf24; margin-top: 6px; display: none; }
 
     .ad-box {
       margin-top: 14px; padding: 10px; border-radius: 12px;
@@ -129,6 +137,28 @@
     }
     .note { color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 18px; line-height: 1.6; }
     .hidden { display: none; }
+
+    /* Reward modal */
+    .modal-bg {
+      display: none; position: fixed; inset: 0; z-index: 50;
+      background: rgba(0,0,0,0.75); align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal-bg.show { display: flex; }
+    .modal {
+      background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+      padding: 16px; width: 100%; max-width: 360px; text-align: center;
+    }
+    .modal h3 { margin: 0 0 6px; font-size: 1.05rem; }
+    .modal p { margin: 0 0 10px; color: var(--muted); font-size: 0.85rem; }
+    .modal .ad-frame { margin: 0 auto; display: block; max-width: 100%; }
+    .modal-actions { display: flex; gap: 8px; margin-top: 12px; }
+    .modal-actions button {
+      flex: 1; padding: 11px; border: 0; border-radius: 10px; font-weight: 700;
+      font-size: 0.92rem; cursor: pointer;
+    }
+    #claimBtn { background: var(--accent-2); color: #052e16; }
+    #claimBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+    #closeModalBtn { background: var(--border); color: var(--text); }
   </style>
 </head>
 <body>
@@ -149,6 +179,8 @@
       <div>ယနေ့ ဗီဒီယို ဘာသာပြန်ခွင့် ကျန်ရှိမှု: <span id="quotaCount" class="quota-badge">3 ကြိမ်</span></div>
       <div style="color:var(--muted);font-size:0.8rem">နောက်တစ်ရက်မှာ ပြန်ရပါမည်</div>
     </div>
+
+    <button id="rewardBtn" class="reward-btn" type="button">🎁 ကြော်ငြာကြည့်ပြီး ၁ ကြိမ် ထပ်ရယူမည်</button>
 
     <div class="tabs">
       <button type="button" class="tab-btn active" data-tab="video">Video Dubbing</button>
@@ -188,8 +220,9 @@
         </div>
 
         <div class="file-box">
-          <label for="videoInput">ဗီဒီယိုဖိုင် ရွေးချယ်ပါ (၅ မိနစ်အောက် MP4 / MOV)</label>
+          <label for="videoInput">ဗီဒီယိုဖိုင် ရွေးချယ်ပါ (၅ မိနစ်အောက် / 100MB အောက် MP4 / MOV)</label>
           <input id="videoInput" type="file" accept="video/*" required />
+          <div id="fileInfo" class="file-info"></div>
         </div>
 
         <button id="videoBtn" type="submit" class="primary-btn">ဗီဒီယို ဘာသာပြန်မည်</button>
@@ -197,6 +230,7 @@
 
       <div id="videoProgressWrap" class="progress-wrap">
         <div id="videoStatusText" class="status-text">စတင်နေပါသည်...</div>
+        <div id="coldStartHint" class="cold-hint">⏳ AI Server စတင်နှိုးနေပါသည် (ပထမအကြိမ် စက္ကန့် ၃၀–၆၀ ကြာနိုင်ပါသည်)...</div>
         <div class="progress-bar-bg"><div id="videoProgressBar" class="progress-bar-fill"></div></div>
 
         <div class="ad-box">
@@ -211,6 +245,7 @@
         <video id="resultVideo" controls playsinline></video>
         <div class="actions">
           <a id="downloadLink" class="download-btn" href="#" download="soe-translated.mp4">ဗီဒီယို Download ဆွဲရန်</a>
+          <button id="copyVideoScriptBtn" type="button" class="copy-btn" style="margin-top:0;">📋 စာသားကူးယူမည်</button>
         </div>
 
         <div class="ad-box">
@@ -269,8 +304,25 @@
     </p>
   </div>
 
+  <!-- Reward ad modal -->
+  <div id="rewardModal" class="modal-bg">
+    <div class="modal">
+      <h3>🎁 ကြော်ငြာကြည့်ပြီး ၁ ကြိမ် ရယူပါ</h3>
+      <p id="rewardHint">ခဏစောင့်ပါ...</p>
+      <iframe id="rewardFrame" class="ad-frame" scrolling="no" title="ad"></iframe>
+      <div class="modal-actions">
+        <button id="closeModalBtn" type="button">ပိတ်မည်</button>
+        <button id="claimBtn" type="button" disabled>ရယူမည်</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const API_BASE = "https://soe-ai-translator-app.onrender.com";
+    const MAX_VIDEO_MB = 100;
+
+    /* ---------- Wake up Render server early ---------- */
+    fetch(`${API_BASE}/`, { mode: "no-cors" }).catch(() => {});
 
     /* ---------- PWA ---------- */
     if ("serviceWorker" in navigator) {
@@ -292,14 +344,15 @@
     });
 
     /* ---------- Adsterra 300x250 banners ---------- */
-    function mountBannerFrames() {
-      const bannerHtml = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    const bannerHtml = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>body{margin:0;display:flex;align-items:center;justify-content:center;background:transparent}</style></head>
 <body>
 <script>atOptions={'key':'9c00a751d36bb3fd0fab385c7bd6777a','format':'iframe','height':250,'width':300,'params':{}};<\/script>
 <script data-cfasync="false" src="https://bancadeltempoidea.org/22/9c00a751d36bb3fd0fab385c7bd6777a"><\/script>
 </body></html>`;
-      document.querySelectorAll("iframe.ad-frame").forEach((f) => { f.srcdoc = bannerHtml; });
+
+    function mountBannerFrames() {
+      document.querySelectorAll("iframe.ad-frame:not(#rewardFrame)").forEach((f) => { f.srcdoc = bannerHtml; });
     }
     mountBannerFrames();
 
@@ -314,17 +367,23 @@
       document.querySelectorAll("iframe.ad-frame-320").forEach((f) => { f.srcdoc = html; });
     })();
 
-    /* ---------- Daily quota (ကြော်ငြာနှင့် မဆက်စပ်) ---------- */
+    /* ---------- Daily quota + ကြော်ငြာကြည့်ပြီး bonus ---------- */
     const DAILY_FREE_LIMIT = 3;
-    const STORAGE_KEY = "soe_daily_quota_v1";
+    const BONUS_PER_AD = 1;
+    const MAX_AD_BONUS_PER_DAY = 5;
+    const REWARD_WAIT_SECONDS = 15;
+    const STORAGE_KEY = "soe_daily_quota_v2";
     const todayKey = () => new Date().toISOString().slice(0, 10);
 
     function loadQuota() {
       try {
         const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-        if (s.date === todayKey() && typeof s.remaining === "number") return s;
+        if (s.date === todayKey() && typeof s.remaining === "number") {
+          if (typeof s.bonusUsed !== "number") s.bonusUsed = 0;
+          return s;
+        }
       } catch (e) {}
-      const fresh = { date: todayKey(), remaining: DAILY_FREE_LIMIT };
+      const fresh = { date: todayKey(), remaining: DAILY_FREE_LIMIT, bonusUsed: 0 };
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh)); } catch (e) {}
       return fresh;
     }
@@ -332,13 +391,63 @@
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(q)); } catch (e) {}
       updateQuotaUI();
     }
+    const rewardBtn = document.getElementById("rewardBtn");
     function updateQuotaUI() {
       const q = loadQuota();
       const el = document.getElementById("quotaCount");
       el.textContent = `${q.remaining} ကြိမ်`;
       el.style.color = q.remaining > 0 ? "var(--accent-2)" : "var(--danger)";
+      const canReward = q.remaining <= 0 && q.bonusUsed < MAX_AD_BONUS_PER_DAY;
+      rewardBtn.style.display = canReward ? "block" : "none";
     }
     updateQuotaUI();
+
+    /* ---------- Reward modal ---------- */
+    const rewardModal = document.getElementById("rewardModal");
+    const rewardFrame = document.getElementById("rewardFrame");
+    const rewardHint = document.getElementById("rewardHint");
+    const claimBtn = document.getElementById("claimBtn");
+    const closeModalBtn = document.getElementById("closeModalBtn");
+    let rewardTimer = null;
+
+    function openRewardModal() {
+      const q = loadQuota();
+      if (q.bonusUsed >= MAX_AD_BONUS_PER_DAY) return;
+      rewardFrame.srcdoc = bannerHtml;
+      rewardModal.classList.add("show");
+      claimBtn.disabled = true;
+      let left = REWARD_WAIT_SECONDS;
+      rewardHint.textContent = `ကြော်ငြာကို ${left} စက္ကန့် စောင့်ပါ...`;
+      clearInterval(rewardTimer);
+      rewardTimer = setInterval(() => {
+        if (document.hidden) return; // Tab ပြောင်းသွားရင် ခဏရပ်ထားမည်
+        left -= 1;
+        if (left > 0) {
+          rewardHint.textContent = `ကြော်ငြာကို ${left} စက္ကန့် စောင့်ပါ...`;
+        } else {
+          clearInterval(rewardTimer);
+          rewardHint.textContent = "ပြီးပါပြီ! 'ရယူမည်' ကို နှိပ်ပါ။";
+          claimBtn.disabled = false;
+        }
+      }, 1000);
+    }
+    function closeRewardModal() {
+      clearInterval(rewardTimer);
+      rewardModal.classList.remove("show");
+      rewardFrame.srcdoc = "";
+    }
+    rewardBtn.addEventListener("click", openRewardModal);
+    closeModalBtn.addEventListener("click", closeRewardModal);
+    claimBtn.addEventListener("click", () => {
+      if (claimBtn.disabled) return;
+      const q = loadQuota();
+      if (q.bonusUsed >= MAX_AD_BONUS_PER_DAY) { closeRewardModal(); return; }
+      q.remaining += BONUS_PER_AD;
+      q.bonusUsed += 1;
+      saveQuota(q);
+      closeRewardModal();
+      clearVideoError();
+    });
 
     /* ---------- Tabs ---------- */
     document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -351,28 +460,51 @@
       });
     });
 
+    /* ---------- File Selection Info ---------- */
+    const videoInput = document.getElementById("videoInput");
+    const fileInfo = document.getElementById("fileInfo");
+    videoInput.addEventListener("change", () => {
+      const file = videoInput.files && videoInput.files[0];
+      if (!file) { fileInfo.textContent = ""; return; }
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      fileInfo.textContent = `ရွေးချယ်ထားသောဖိုင်: ${file.name} (${sizeMB} MB)`;
+      fileInfo.style.color = file.size > MAX_VIDEO_MB * 1024 * 1024 ? "var(--danger)" : "var(--muted)";
+    });
+
     /* ---------- Video ---------- */
     const videoForm = document.getElementById("videoForm");
     const videoBtn = document.getElementById("videoBtn");
-    const videoInput = document.getElementById("videoInput");
     const videoProgressWrap = document.getElementById("videoProgressWrap");
     const videoProgressBar = document.getElementById("videoProgressBar");
     const videoStatusText = document.getElementById("videoStatusText");
+    const coldStartHint = document.getElementById("coldStartHint");
     const videoError = document.getElementById("videoError");
     const videoResult = document.getElementById("videoResult");
     const resultVideo = document.getElementById("resultVideo");
     const downloadLink = document.getElementById("downloadLink");
     const resultScript = document.getElementById("resultScript");
     let pollTimer = null;
+    let coldStartTimer = null;
 
-    const showVideoError = (m) => { videoError.textContent = m; videoError.style.display = "block"; };
-    const clearVideoError = () => { videoError.textContent = ""; videoError.style.display = "none"; };
+    const showVideoError = (m) => {
+      clearTimeout(coldStartTimer);
+      coldStartHint.style.display = "none";
+      videoError.textContent = m;
+      videoError.style.display = "block";
+    };
+    const clearVideoError = () => {
+      videoError.textContent = "";
+      videoError.style.display = "none";
+    };
 
     async function pollJob(jobId) {
       try {
         const res = await fetch(`${API_BASE}/api/job/${jobId}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "အလုပ်အခြေအနေ စစ်ဆေး၍ မရပါ။");
+
+        clearTimeout(coldStartTimer);
+        coldStartHint.style.display = "none";
 
         const pct = Number(data.progress || 0);
         videoProgressBar.style.width = `${pct}%`;
@@ -407,18 +539,33 @@
       clearVideoError();
       videoResult.style.display = "none";
 
-      if (loadQuota().remaining <= 0) {
-        showVideoError("ယနေ့ အခမဲ့ အကြိမ်ရေ ပြည့်သွားပါပြီ။ မနက်ဖြန် ပြန်လာပါ။ စာသား ဘာသာပြန်ခြင်းကိုတော့ အကန့်အသတ်မရှိ သုံးနိုင်ပါသည်။");
+      const qNow = loadQuota();
+      if (qNow.remaining <= 0) {
+        if (qNow.bonusUsed < MAX_AD_BONUS_PER_DAY) {
+          showVideoError("အခမဲ့ အကြိမ်ရေ ကုန်သွားပါပြီ။ အပေါ်က 🎁 ခလုတ်ကို နှိပ်ပြီး ကြော်ငြာကြည့်ကာ ၁ ကြိမ် ထပ်ရယူနိုင်ပါသည်။ စာသား ဘာသာပြန်ခြင်းကိုတော့ အကန့်အသတ်မရှိ သုံးနိုင်ပါသည်။");
+        } else {
+          showVideoError("ယနေ့ အကြိမ်ရေ အားလုံး ပြည့်သွားပါပြီ။ မနက်ဖြန် ပြန်လာပါ။ စာသား ဘာသာပြန်ခြင်းကိုတော့ အကန့်အသတ်မရှိ သုံးနိုင်ပါသည်။");
+        }
         return;
       }
+
       const file = videoInput.files && videoInput.files[0];
       if (!file) { showVideoError("ဗီဒီယိုဖိုင် အရင် ရွေးချယ်ပါ။"); return; }
+      if (file.size > MAX_VIDEO_MB * 1024 * 1024) {
+        showVideoError(`ဖိုင်အရွယ်အစား ကြီးလွန်းပါသည် (${MAX_VIDEO_MB}MB အောက် ဗီဒီယိုကို ရွေးချယ်ပါ)။`);
+        return;
+      }
 
       if (pollTimer) clearInterval(pollTimer);
+      clearTimeout(coldStartTimer);
       videoBtn.disabled = true;
       videoProgressWrap.style.display = "block";
       videoProgressBar.style.width = "2%";
       videoStatusText.textContent = "Server သို့ ဗီဒီယိုတင်နေပါသည်... (2%)";
+
+      coldStartTimer = setTimeout(() => {
+        coldStartHint.style.display = "block";
+      }, 6000);
 
       try {
         const fd = new FormData();
@@ -437,6 +584,15 @@
         videoBtn.disabled = false;
         showVideoError(err.message || "တင်သွင်းမှု မအောင်မြင်ပါ။");
       }
+    });
+
+    document.getElementById("copyVideoScriptBtn").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(resultScript.textContent);
+        const b = document.getElementById("copyVideoScriptBtn");
+        b.textContent = "✅ ကူးပြီးပါပြီ";
+        setTimeout(() => (b.textContent = "📋 စာသားကူးယူမည်"), 1500);
+      } catch (e) {}
     });
 
     /* ---------- Text ---------- */
