@@ -49,7 +49,19 @@ const getTarget = (code) => TARGETS[code] || TARGETS.my;
 // ၁ စက္ကန့်အတွင်း ပြောနိုင်တဲ့ စာလုံးအရေအတွက် (ခန့်မှန်း) - ဘာသာပြန်ကို slot နဲ့ ကိုက်စေရန်
 const CHARS_PER_SEC = { my: 11, th: 11, en: 15, zh: 4.5 };
 
-const VOICES = { male: "Charon", female: "Kore", child: "Puck" };
+// အသံ ၂ မျိုးပဲ: B ယောက်ျားလေး၊ G မိန်းကလေး (အခြား tag တွေ လာရင် ယောက်ျား→B၊ မိန်းမ→G ပြောင်းသုံး)
+// edge = Edge voice အခြေခံ + pitch/rate ညှိချက်၊ gem = Gemini TTS အသံနာမည်
+const PROFILES = {
+  B: { edge: "male",   pitch: "+28Hz", rate: "-8%", gem: "Puck", style: "a cute, soft-spoken little boy" },
+  G: { edge: "female", pitch: "+25Hz", rate: "-8%", gem: "Leda", style: "a sweet, soft-spoken little girl" }
+};
+const TAG_MAP = { B: "B", C: "B", M: "B", OM: "B", G: "G", F: "G", OF: "G" };
+const normTag = (t) => TAG_MAP[String(t || "").toUpperCase()] || null;
+const isFemaleTag = (t) => normTag(t) === "G";
+const TAG_RE = "OM|OF|M|F|B|G|C";
+// အသံနူးညံ့စေရန် Gemini ကို style စာကြောင်း ခိုင်းမည် (စာကြောင်းကို ဖတ်ထုတ်ရင် GEMINI_STYLE_PROMPT=false ထားပါ)
+const SOFT_VOICE = process.env.SOFT_VOICE !== "false";
+const GEMINI_STYLE_PROMPT = process.env.GEMINI_STYLE_PROMPT !== "false";
 const MAX_VIDEO_SECONDS = 7 * 60;
 const MAX_UPLOAD_BYTES = 300 * 1024 * 1024;
 const TTS_SAMPLE_RATE = 24000;
@@ -229,7 +241,8 @@ function decodeAudio(buf, mime = "") {
 }
 
 let workingTtsModel = null;
-async function ttsChunk(text, voiceName) {
+async function ttsChunk(text, voiceName, style = "") {
+  const spokenText = style ? `${style}: ${text}` : text;
   const order = [...new Set([workingTtsModel, ...TTS_MODELS].filter(Boolean))];
   const errors = [];
   for (const model of order) {
@@ -237,7 +250,7 @@ async function ttsChunk(text, voiceName) {
       try {
         const response = await ai.models.generateContent({
           model,
-          contents: [{ role: "user", parts: [{ text }] }],
+          contents: [{ role: "user", parts: [{ text: spokenText }] }],
           config: {
             responseModalities: ["AUDIO"],
             speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
@@ -264,15 +277,17 @@ function escapeXml(t) {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-async function edgeTtsChunk(text, voiceKey, dir, idx, target) {
+async function edgeTtsChunk(text, profile, dir, idx, target) {
   const tts = new MsEdgeTTS();
   try {
-    const edgeVoiceKey = voiceKey === "female" ? "female" : "male";
+    const edgeVoiceKey = profile.edge;
     await tts.setMetadata(
       getTarget(target).edge[edgeVoiceKey] || getTarget(target).edge.male,
       OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS
     );
-    const ssmlText = `<prosody rate="+0%">${escapeXml(text)}</prosody>`;
+    const rate = profile.rate;
+    const pitch = profile.pitch;
+    const ssmlText = `<prosody rate="${rate}" pitch="${pitch}">${escapeXml(text)}</prosody>`;
     const { audioStream } = await tts.toStream(ssmlText);
     const bufs = [];
     await new Promise((resolve, reject) => {
@@ -295,11 +310,11 @@ async function edgeTtsChunk(text, voiceKey, dir, idx, target) {
   }
 }
 
-async function edgeWithRetry(text, voiceKey, dir, idx, target) {
+async function edgeWithRetry(text, profile, dir, idx, target) {
   let lastErr;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      return await edgeTtsChunk(text, voiceKey, dir, idx, target);
+      return await edgeTtsChunk(text, profile, dir, idx, target);
     } catch (err) {
       lastErr = err;
       console.error(`Edge TTS attempt ${attempt + 1} failed:`, err.message);
@@ -309,25 +324,33 @@ async function edgeWithRetry(text, voiceKey, dir, idx, target) {
   throw lastErr;
 }
 
-function geminiVoiceFor(voiceKey, tag) {
-  return tag === "C" ? VOICES.child : VOICES[voiceKey] || VOICES.male;
+function profileFor(voiceKey, tag) {
+  const t = normTag(tag) || (voiceKey === "female" ? "G" : "B");
+  return PROFILES[t];
 }
 
-async function synthChunk(text, voiceKey, dir, idx, target, tag = "M") {
+function geminiStyle(profile) {
+  if (!GEMINI_STYLE_PROMPT) return "";
+  return `Say ${SOFT_VOICE ? "softly and gently, " : ""}in the voice of ${profile.style}`;
+}
+
+async function synthChunk(text, voiceKey, dir, idx, target, tag = "B") {
+  const profile = profileFor(voiceKey, tag);
+  const gem = () => ttsChunk(text, profile.gem, geminiStyle(profile));
   if (TTS_PRIORITY === "gemini" && ai) {
     try {
-      return await ttsChunk(text, geminiVoiceFor(voiceKey, tag));
+      return await gem();
     } catch (err) {
       console.error("Gemini TTS failed, falling back to Edge:", err.message);
-      return await edgeWithRetry(text, voiceKey, dir, idx, target);
+      return await edgeWithRetry(text, profile, dir, idx, target);
     }
   }
   try {
-    return await edgeWithRetry(text, voiceKey, dir, idx, target);
+    return await edgeWithRetry(text, profile, dir, idx, target);
   } catch (err) {
     console.error("Edge TTS failed twice, falling back to Gemini:", err.message);
     if (!ai) throw err;
-    return await ttsChunk(text, geminiVoiceFor(voiceKey, tag));
+    return await gem();
   }
 }
 
@@ -392,16 +415,16 @@ function parseTimedSegments(scriptText, duration, fallbackVoice = "male") {
   const lines = String(scriptText || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out = [];
   for (const line of lines) {
-    const m = line.match(/^\[(M|F|C)\]\s*\[?\s*(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)\s*\]?\s*[|:]?\s*(.+)$/i);
+    const m = line.match(/^\[(OM|OF|M|F|B|G|C)\]\s*\[?\s*(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)\s*\]?\s*[|:]?\s*(.+)$/i);
     if (!m) continue;
-    const tag = m[1].toUpperCase();
+    const tag = normTag(m[1]) || "B";
     const start = Number(m[2]);
     const end = Number(m[3]);
     const text = m[4].trim();
     if (!text || !(end > start) || start > duration + 1) continue;
     out.push({
       tag,
-      voiceKey: tag === "F" ? "female" : tag === "M" || tag === "C" ? "male" : defaultVoice,
+      voiceKey: isFemaleTag(tag) ? "female" : "male",
       text,
       start: Math.min(start, Math.max(0, duration - 0.3)),
       end: Math.min(end, duration)
@@ -546,14 +569,12 @@ function parseSpeakerSegments(scriptText, fallbackVoice = "male") {
   const lines = String(scriptText || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const raw = [];
   for (const line of lines) {
-    const match = line.match(/^\[(M|F|C)\]\s*(.+)$/i);
-    const tag = match ? match[1].toUpperCase() : null;
+    const match = line.match(/^\[(OM|OF|M|F|B|G|C)\]\s*(.+)$/i);
+    const tag = match ? normTag(match[1]) : null;
     const speech = (match ? match[2] : line).replace(TS_PREFIX, "").trim();
     if (!speech) continue;
-    let voiceKey = defaultVoice;
-    if (tag === "F") voiceKey = "female";
-    else if (tag === "M" || tag === "C") voiceKey = "male";
-    raw.push({ tag: tag || (voiceKey === "female" ? "F" : "M"), voiceKey, text: speech });
+    const voiceKey = tag ? (isFemaleTag(tag) ? "female" : "male") : defaultVoice;
+    raw.push({ tag: tag || (voiceKey === "female" ? "G" : "B"), voiceKey, text: speech });
   }
   const segments = [];
   for (const s of raw) {
@@ -674,32 +695,59 @@ async function myMemoryTranslate(text, sourceLanguage, targetLanguage = "my") {
   return out.join(" ");
 }
 
-// segment တစ်ခုချင်းကို slot အရှည်နဲ့ကိုက်အောင် စာလုံးကန့်ပြီး ဘာသာပြန်
-async function translateSegments(segs, sourceLanguage, targetLanguage) {
+// segment တစ်ခုချင်းကို slot အရှည်နဲ့ကိုက်အောင် စာလုံးကန့်ပြီး ဘာသာပြန် (အသံပါပို့ရင် စကားပြောသူ အမျိုးအစားပါ ခွဲပေးသည်)
+// return: [{ tag, text }]
+async function translateSegments(segs, sourceLanguage, targetLanguage, audioBase64 = null, defaultTag = "B") {
   const cps = CHARS_PER_SEC[targetLanguage] || 11;
   const items = segs.map((s, i) => ({
     id: i,
+    start: Number(s.start.toFixed(1)),
+    end: Number(s.end.toFixed(1)),
     seconds: Number((s.end - s.start).toFixed(1)),
     maxChars: Math.max(6, Math.round((s.end - s.start) * cps)),
     text: s.text
   }));
-  const prompt =
+  const common =
     `Translate each item's "text" from ${languageLabel(sourceLanguage)} into natural, clear ${getTarget(targetLanguage).label} for voice dubbing. ` +
     `STRICT RULE: each translation must be speakable within that item's "seconds", so it must NOT exceed "maxChars" characters. ` +
-    `Use short simple words, drop filler, keep the meaning. ` +
-    `Return ONLY a JSON array of strings, exactly ${items.length} items, in the same order as the input, with no markdown and no explanations.\n\n` +
-    JSON.stringify(items);
+    `Use short simple words, drop filler, keep the meaning. `;
+
+  if (audioBase64) {
+    try {
+      const prompt =
+        `Listen to the audio. The items below are already timed (start/end seconds in this audio). ` + common +
+        `Also decide who is speaking in each item by listening to that time range, and set "voice" to one of: ` +
+        `B (male voice, boy) or G (female voice, girl). Use B for any male speaker and G for any female speaker. ` +
+        `Return ONLY a JSON array of objects like {"voice":"B","text":"..."}, exactly ${items.length} items, same order, no markdown, no explanations.\n\n` +
+        JSON.stringify(items);
+      const raw = await generateText([
+        { role: "user", parts: [{ inlineData: { mimeType: "audio/mp3", data: audioBase64 } }, { text: prompt }] }
+      ]);
+      const arr = JSON.parse(raw.replace(/```json|```/g, "").trim());
+      if (Array.isArray(arr) && arr.length === segs.length && arr.every((x) => String(x?.text || "").trim())) {
+        return arr.map((x) => ({ tag: normTag(x.voice) || defaultTag, text: String(x.text).trim() }));
+      }
+      throw new Error("JSON အရေအတွက် မကိုက်ပါ။");
+    } catch (err) {
+      console.error("Gemini audio+translate failed, using text-only:", err.message);
+    }
+  }
+
   try {
+    const prompt =
+      common +
+      `Return ONLY a JSON array of strings, exactly ${items.length} items, in the same order as the input, with no markdown and no explanations.\n\n` +
+      JSON.stringify(items.map(({ id, seconds, maxChars, text }) => ({ id, seconds, maxChars, text })));
     const raw = await generateText(prompt);
     const arr = JSON.parse(raw.replace(/```json|```/g, "").trim());
     if (Array.isArray(arr) && arr.length === segs.length && arr.every((x) => String(x).trim())) {
-      return arr.map((x) => String(x).trim());
+      return arr.map((x) => ({ tag: defaultTag, text: String(x).trim() }));
     }
     throw new Error("JSON အရေအတွက် မကိုက်ပါ။");
   } catch (err) {
     console.error("Gemini segment translate failed, using MyMemory:", err.message);
     const out = [];
-    for (const s of segs) out.push(await myMemoryTranslate(s.text, sourceLanguage, targetLanguage));
+    for (const s of segs) out.push({ tag: defaultTag, text: await myMemoryTranslate(s.text, sourceLanguage, targetLanguage) });
     return out;
   }
 }
@@ -709,25 +757,31 @@ async function whisperPath(audioPath, opts, job) {
   let segs = await groqTranscribeSegments(audioPath, opts.sourceLanguage);
   if (!segs.length) throw new NoSpeechError();
   segs = mergeShortSegments(segs);
-  setJob(job, { progress: 28, message: "ဘာသာပြန်နေပါသည်..." });
-  const translated = await translateSegments(segs, opts.sourceLanguage, opts.targetLanguage);
-  const voiceKey = opts.voice === "female" ? "female" : "male";
-  const tag = voiceKey === "female" ? "F" : "M";
-  return segs.map((s, i) => ({ tag, voiceKey, text: translated[i], start: s.start, end: s.end }));
+  setJob(job, { progress: 28, message: "အသံအမျိုးအစား ခွဲပြီး ဘာသာပြန်နေပါသည်..." });
+  const defaultTag = opts.voice === "female" ? "G" : "B";
+  const audioBase64 = ai ? fs.readFileSync(audioPath).toString("base64") : null;
+  const translated = await translateSegments(segs, opts.sourceLanguage, opts.targetLanguage, audioBase64, defaultTag);
+  return segs.map((s, i) => ({
+    tag: translated[i].tag,
+    voiceKey: isFemaleTag(translated[i].tag) ? "female" : "male",
+    text: translated[i].text,
+    start: s.start,
+    end: s.end
+  }));
 }
 
 /* ---- Gemini audio: Whisper မရရင် သုံး ---- */
 async function geminiPath(audioBase64, opts, job, duration) {
   setJob(job, {
     progress: 20,
-    message: "ယောက်ျား၊ မိန်းကလေး၊ ကလေး အသံများကို နားထောင်ပြီး ခွဲခြားဘာသာပြန်နေပါသည်..."
+    message: "ယောက်ျား၊ မိန်းမ အသံများကို နားထောင်ပြီး ခွဲခြားဘာသာပြန်နေပါသည်..."
   });
   const cps = CHARS_PER_SEC[opts.targetLanguage] || 11;
   const prompt =
     `Listen carefully to the actual voices in this audio (spoken language: ${languageLabel(opts.sourceLanguage)}). ` +
-    `Identify who is speaking each line by voice pitch and tone: use [M] for a male voice, [F] for a female voice, and [C] for a child voice. ` +
+    `Identify who is speaking each line by voice pitch and tone: use [B] for any male voice and [G] for any female voice. ` +
     `Translate everything spoken into natural, clear ${getTarget(opts.targetLanguage).label} suitable for voice dubbing. ` +
-    `Write one sentence per line in EXACTLY this format: [M] 3.2-6.8 | translated sentence  (the two numbers are the start and end time in seconds, relative to the start of the audio, when that sentence is spoken in the ORIGINAL audio). Return ONLY these lines with no explanations. ` +
+    `Write one sentence per line in EXACTLY this format: [B] 3.2-6.8 | translated sentence  (the two numbers are the start and end time in seconds, relative to the start of the audio, when that sentence is spoken in the ORIGINAL audio). Return ONLY these lines with no explanations. ` +
     `TIMING RULE: the video is ${Math.round(duration)} seconds long. Each translated line must be speakable within its (end - start) seconds: at most about ${cps} characters per second. Use short simple words, no filler. Never make a line longer than the original speech. ` +
     `If there is no speech, return exactly: NO_SPEECH`;
 
@@ -795,7 +849,7 @@ async function processJob(job, file, opts) {
       const script = await geminiPath(audioBase64, opts, job, info.duration);
       displayText = String(script)
         .split(/\r?\n/)
-        .map((l) => l.replace(/^(\[(?:M|F|C)\])\s*\[?\s*\d+(?:\.\d+)?\s*[-–]\s*\d+(?:\.\d+)?\s*\]?\s*[|:]?\s*/i, "$1 "))
+        .map((l) => l.replace(/^(\[(?:OM|OF|M|F|B|G|C)\])\s*\[?\s*\d+(?:\.\d+)?\s*[-–]\s*\d+(?:\.\d+)?\s*\]?\s*[|:]?\s*/i, "$1 "))
         .join("\n");
 
       let sp = { speechStart: 0, speechEnd: info.duration, onsets: [] };
