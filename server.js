@@ -50,7 +50,11 @@ const VOICES = { male: "Charon", female: "Kore", child: "Puck" };
 const MAX_VIDEO_SECONDS = 7 * 60;
 const MAX_UPLOAD_BYTES = 300 * 1024 * 1024;
 const TTS_SAMPLE_RATE = 24000;
-const MAX_TEMPO = 1.45; // အသံနူးညံ့မှုမပျက်စေရန် ထိန်းညှိထားသည်
+const MAX_TEMPO = 1.6;                 // အသံမပျက်စေဘဲ အများဆုံး မြန်နိုင်သည့်နှုန်း
+const GEMINI_TIMEOUT_MS = 90 * 1000;   // Gemini တစ်ခါခေါ်တာ ၉၀ စက္ကန့်ထက် မကြာစေရ
+const TTS_CONCURRENCY = 2;             // Edge TTS တည်ငြိမ်စေရန်
+// TTS_PRIORITY=gemini ထားရင် Gemini အသံကို အရင်သုံး (ပိုသဘာဝကျ၊ ဒါပေမဲ့ quota နည်း)
+const TTS_PRIORITY = (process.env.TTS_PRIORITY || "edge").toLowerCase();
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -89,6 +93,7 @@ function coolDown(model, err) {
   let ms = 0;
   if (/PerDay|per day/i.test(m)) ms = 60 * 60 * 1000;
   else if (/429|RESOURCE_EXHAUSTED/i.test(m)) ms = 2 * 60 * 1000;
+  else if (/503|UNAVAILABLE|abort|timeout|timed out/i.test(m)) ms = 2 * 60 * 1000; // အလုပ်များ/နှေးနေတဲ့ model ကို ခဏကျော်
   else if (/404|NOT_FOUND|no longer available/i.test(m)) ms = 6 * 60 * 60 * 1000;
   if (ms) modelCooldown.set(model, Date.now() + ms);
 }
@@ -101,7 +106,11 @@ async function generateText(contents) {
   const errors = [];
   for (const model of order) {
     try {
-      const response = await ai.models.generateContent({ model, contents });
+      const response = await ai.models.generateContent({
+        model,
+        contents,
+        config: { abortSignal: AbortSignal.timeout(GEMINI_TIMEOUT_MS) }
+      });
       const text = (response.text || "").trim();
       if (text) {
         workingTextModel = model;
@@ -160,7 +169,8 @@ async function ttsChunk(text, voiceName, tag = "M") {
             responseModalities: ["AUDIO"],
             speechConfig: {
               voiceConfig: { prebuiltVoiceConfig: { voiceName } }
-            }
+            },
+            abortSignal: AbortSignal.timeout(GEMINI_TIMEOUT_MS)
           }
         });
         const parts = response.candidates?.[0]?.content?.parts || [];
@@ -206,15 +216,41 @@ async function edgeTtsChunk(text, voiceKey, dir, idx, target) {
   return { pcm: fs.readFileSync(outFile), rate: TTS_SAMPLE_RATE };
 }
 
-// Edge (အခမဲ့) ကို အရင်၊ မရမှ Gemini
+// Edge ကို ၂ ကြိမ်စမ်း (ပထမကျရင် ပြန်စမ်း)
+async function edgeWithRetry(text, voiceKey, dir, idx, target) {
+  let lastErr;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await edgeTtsChunk(text, voiceKey, dir, idx, target);
+    } catch (err) {
+      lastErr = err;
+      console.error(`Edge TTS attempt ${attempt + 1} failed:`, err.message);
+      await sleep(600);
+    }
+  }
+  throw lastErr;
+}
+
+function geminiVoiceFor(voiceKey, tag) {
+  return tag === "C" ? VOICES.child : VOICES[voiceKey] || VOICES.male;
+}
+
+// Edge (အခမဲ့) ကို အရင်၊ ၂ ကြိမ်ကျမှ Gemini (TTS_PRIORITY=gemini ဆိုရင် ပြောင်းပြန်)
 async function synthChunk(text, voiceKey, dir, idx, target, tag = "M") {
+  if (TTS_PRIORITY === "gemini" && ai) {
+    try {
+      return await ttsChunk(text, geminiVoiceFor(voiceKey, tag), tag);
+    } catch (err) {
+      console.error("Gemini TTS failed, falling back to Edge:", err.message);
+      return await edgeWithRetry(text, voiceKey, dir, idx, target);
+    }
+  }
   try {
-    return await edgeTtsChunk(text, voiceKey, dir, idx, target);
+    return await edgeWithRetry(text, voiceKey, dir, idx, target);
   } catch (err) {
-    console.error("Edge TTS failed, falling back to Gemini:", err.message);
+    console.error("Edge TTS failed twice, falling back to Gemini:", err.message);
     if (!ai) throw err;
-    const geminiVoice = tag === "C" ? VOICES.child : VOICES[voiceKey] || VOICES.male;
-    return await ttsChunk(text, geminiVoice, tag);
+    return await ttsChunk(text, geminiVoiceFor(voiceKey, tag), tag);
   }
 }
 
@@ -241,7 +277,7 @@ function splitForTts(text, max = 450) {
   return chunks;
 }
 
-/* [M], [F], [C] Tag အလိုက် အသံခွဲခြင်း */
+/* [M], [F], [C] Tag အလိုက် အသံခွဲခြင်း — အသံတူ ဆက်တိုက်စာကြောင်းတွေကို ပေါင်းပြီး TTS ခေါ်ရတဲ့အကြိမ် လျှော့သည် */
 function parseSpeakerSegments(scriptText, fallbackVoice = "male") {
   const defaultVoice = fallbackVoice === "female" ? "female" : "male";
   const lines = String(scriptText || "")
@@ -249,7 +285,7 @@ function parseSpeakerSegments(scriptText, fallbackVoice = "male") {
     .map((l) => l.trim())
     .filter(Boolean);
 
-  const segments = [];
+  const raw = [];
   for (const line of lines) {
     const match = line.match(/^\[(M|F|C)\]\s*(.+)$/i);
     const tag = match ? match[1].toUpperCase() : null;
@@ -260,12 +296,29 @@ function parseSpeakerSegments(scriptText, fallbackVoice = "male") {
     if (tag === "F") voiceKey = "female";
     else if (tag === "M" || tag === "C") voiceKey = "male";
 
-    for (const part of splitForTts(speech, 450)) {
-      segments.push({
-        tag: tag || (voiceKey === "female" ? "F" : "M"),
-        voiceKey,
-        text: part
-      });
+    raw.push({
+      tag: tag || (voiceKey === "female" ? "F" : "M"),
+      voiceKey,
+      text: speech
+    });
+  }
+
+  // အသံတူ ဆက်တိုက်လာရင် ၄၅၀ လုံးအထိ ပေါင်း
+  const merged = [];
+  for (const s of raw) {
+    const last = merged[merged.length - 1];
+    if (last && last.tag === s.tag && (last.text + " " + s.text).length <= 450) {
+      last.text += " " + s.text;
+    } else {
+      merged.push({ ...s });
+    }
+  }
+
+  // ၄၅၀ လုံးထက်ရှည်တာကို ခွဲ
+  const segments = [];
+  for (const s of merged) {
+    for (const part of splitForTts(s.text, 450)) {
+      segments.push({ tag: s.tag, voiceKey: s.voiceKey, text: part });
     }
   }
   return segments;
@@ -465,6 +518,7 @@ async function processJob(job, file, opts) {
     if (!segments.length) {
       throw new Error("ဘာသာပြန်စာသားမှ အသံဖန်တီးရန် စာကြောင်း မတွေ့ပါ။");
     }
+    console.log(`[job ${job.id.slice(0, 6)}] TTS segments: ${segments.length}`);
 
     const pcmParts = new Array(segments.length);
     let nextIdx = 0, doneCount = 0;
@@ -482,7 +536,7 @@ async function processJob(job, file, opts) {
         });
       }
     };
-    await Promise.all(Array.from({ length: Math.min(3, segments.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(TTS_CONCURRENCY, segments.length) }, worker));
     lap("TTS");
 
     const ttsRate = pcmParts[0].rate;
@@ -500,7 +554,8 @@ async function processJob(job, file, opts) {
     let tempoFilter = "anull";
     if (tempo > 1.02) {
       if (tempo > MAX_TEMPO) {
-        note = " (အသံနူးညံ့မှုမပျက်စေရန် အတိုင်းအတာတစ်ခုအထိသာ ညှိထားပါသည်)";
+        // အသံက ဗီဒီယိုထက် ရှည်လွန်းလို့ အမြန်ညှိပြီးတောင် နောက်ဆုံးပိုင်း ဖြတ်ခံရမယ်
+        note = " (အသံက ဗီဒီယိုထက် ရှည်လွန်းလို့ နောက်ဆုံးပိုင်း အနည်းငယ် ဖြတ်ခံရပါသည်)";
         tempo = MAX_TEMPO;
       } else {
         note = " (အသံကို ဗီဒီယိုအရှည်နဲ့ ကိုက်အောင် ညင်သာစွာ ညှိပေးထားသည်)";
