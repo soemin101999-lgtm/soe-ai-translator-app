@@ -19,7 +19,7 @@ app.use(express.json({ limit: "10mb" }));
 
 const apiKey = process.env.GEMINI_API_KEY;
 const groqKey = process.env.GROQ_API_KEY;
-const APP_SECRET = process.env.APP_SECRET || ""; // ထားရင် app ကနေ x-app-secret header ပို့ရမည်
+const APP_SECRET = process.env.APP_SECRET || "";
 const ai = apiKey ? new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "v1beta" } }) : null;
 
 /* ---------------- settings ---------------- */
@@ -46,31 +46,29 @@ const TARGETS = {
 };
 const getTarget = (code) => TARGETS[code] || TARGETS.my;
 
-// ၁ စက္ကန့်အတွင်း ပြောနိုင်တဲ့ စာလုံးအရေအတွက် (ခန့်မှန်း) - ဘာသာပြန်ကို slot နဲ့ ကိုက်စေရန်
 const CHARS_PER_SEC = { my: 11, th: 11, en: 15, zh: 4.5 };
 
-// အသံ ၂ မျိုးပဲ: B ယောက်ျားလေး၊ G မိန်းကလေး (အခြား tag တွေ လာရင် ယောက်ျား→B၊ မိန်းမ→G ပြောင်းသုံး)
-// edge = Edge voice အခြေခံ + pitch/rate ညှိချက်၊ gem = Gemini TTS အသံနာမည်
+// အသံ ၂ မျိုးပဲ: B ယောက်ျား၊ G မိန်းကလေး
 const PROFILES = {
-  B: { edge: "male",   pitch: "+28Hz", rate: "-8%", gem: "Puck", style: "a cute, soft-spoken little boy" },
-  G: { edge: "female", pitch: "+25Hz", rate: "-8%", gem: "Leda", style: "a sweet, soft-spoken little girl" }
+  B: { edge: "male",   pitch: "+20Hz", rate: "-5%", gem: "Puck", style: "a young boy" },
+  G: { edge: "female", pitch: "+15Hz", rate: "-5%", gem: "Leda", style: "a young girl" }
 };
 const TAG_MAP = { B: "B", C: "B", M: "B", OM: "B", G: "G", F: "G", OF: "G" };
 const normTag = (t) => TAG_MAP[String(t || "").toUpperCase()] || null;
 const isFemaleTag = (t) => normTag(t) === "G";
-const TAG_RE = "OM|OF|M|F|B|G|C";
-// အသံနူးညံ့စေရန် Gemini ကို style စာကြောင်း ခိုင်းမည် (စာကြောင်းကို ဖတ်ထုတ်ရင် GEMINI_STYLE_PROMPT=false ထားပါ)
 const SOFT_VOICE = process.env.SOFT_VOICE !== "false";
 const GEMINI_STYLE_PROMPT = process.env.GEMINI_STYLE_PROMPT !== "false";
 const MAX_VIDEO_SECONDS = 7 * 60;
 const MAX_UPLOAD_BYTES = 300 * 1024 * 1024;
 const TTS_SAMPLE_RATE = 24000;
-const MAX_TEMPO = Number(process.env.MAX_TEMPO) || 1.5;
+const MAX_TEMPO = Math.min(2, Number(process.env.MAX_TEMPO) || 1.7);
 const GEMINI_TIMEOUT_MS = 90 * 1000;
 const TTS_CONCURRENCY = 2;
 const JOB_CONCURRENCY = Number(process.env.JOB_CONCURRENCY) || 1;
 const RATE_LIMIT_PER_HOUR = Number(process.env.RATE_LIMIT_PER_HOUR) || 30;
 const TTS_PRIORITY = (process.env.TTS_PRIORITY || "edge").toLowerCase();
+// segment တိုတွေကို ကပ်ပေါင်းမလား (ပေါင်းရင် ယောက်ျား/မိန်းမ ရောနိုင်လို့ default ပိတ်)
+const MERGE_SHORT = process.env.MERGE_SHORT === "true";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -103,14 +101,13 @@ function rateLimit(req, res, next) {
   next();
 }
 
-/* ---------------- daily quota (တစ်ရက် ၃ ကြိမ်၊ ကြော်ငြာ ၁ ခု = ၁ ကြိမ်) ---------------- */
-const QUOTA_ENABLED = process.env.QUOTA_ENABLED === "true"; // default: ပိတ်ထား
+/* ---------------- daily quota ---------------- */
+const QUOTA_ENABLED = process.env.QUOTA_ENABLED === "true";
 const DAILY_FREE = Number(process.env.DAILY_FREE) || 3;
 const MAX_ADS_PER_DAY = Number(process.env.MAX_ADS_PER_DAY) || 10;
 const AD_COOLDOWN_MS = Number(process.env.AD_COOLDOWN_MS) || 15 * 1000;
-const usage = new Map(); // deviceId -> { day, used, ads, lastAd }
+const usage = new Map();
 
-// မြန်မာအချိန် (UTC+6:30) သန်းခေါင်ကျော်ရင် ရက်အသစ်
 const dayKey = () => new Date(Date.now() + 6.5 * 3600 * 1000).toISOString().slice(0, 10);
 
 function getUsage(id) {
@@ -148,7 +145,6 @@ app.get("/api/quota", (req, res) => {
   });
 });
 
-// ကြော်ငြာအပြည့်ကြည့်ပြီးတိုင်း app က ဒါကို ခေါ်ပါ (+၁ ကြိမ်)
 app.post("/api/reward-ad", (req, res) => {
   const id = deviceId(req);
   if (!id) return res.status(400).json({ error: "x-device-id မပါပါ။" });
@@ -273,22 +269,16 @@ async function ttsChunk(text, voiceName, style = "") {
 }
 
 /* ---------------- Edge TTS (အခမဲ့) ---------------- */
-function escapeXml(t) {
-  return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
 async function edgeTtsChunk(text, profile, dir, idx, target) {
   const tts = new MsEdgeTTS();
   try {
-    const edgeVoiceKey = profile.edge;
+    const voices = getTarget(target).edge;
     await tts.setMetadata(
-      getTarget(target).edge[edgeVoiceKey] || getTarget(target).edge.male,
+      voices[profile.edge] || voices.male,
       OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS
     );
-    const rate = profile.rate;
-    const pitch = profile.pitch;
-    const ssmlText = `<prosody rate="${rate}" pitch="${pitch}">${escapeXml(text)}</prosody>`;
-    const { audioStream } = await tts.toStream(ssmlText);
+    // prosody ကို library က ကိုယ်တိုင် ထည့်ပေးသည် (tag စာသား အသံထွက်မနေစေရန်)
+    const { audioStream } = await tts.toStream(text, { rate: profile.rate, pitch: profile.pitch });
     const bufs = [];
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("Edge TTS အချိန်ကြာလွန်းသည်")), 40000);
@@ -411,13 +401,12 @@ function probeVideo(file) {
 const TS_PREFIX = /^\s*\[?\s*\d+(?:\.\d+)?\s*[-–]\s*\d+(?:\.\d+)?\s*\]?\s*[|:]?\s*/;
 
 function parseTimedSegments(scriptText, duration, fallbackVoice = "male") {
-  const defaultVoice = fallbackVoice === "female" ? "female" : "male";
   const lines = String(scriptText || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out = [];
   for (const line of lines) {
     const m = line.match(/^\[(OM|OF|M|F|B|G|C)\]\s*\[?\s*(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)\s*\]?\s*[|:]?\s*(.+)$/i);
     if (!m) continue;
-    const tag = normTag(m[1]) || "B";
+    const tag = normTag(m[1]) || (fallbackVoice === "female" ? "G" : "B");
     const start = Number(m[2]);
     const end = Number(m[3]);
     const text = m[4].trim();
@@ -453,7 +442,6 @@ function detectSpeech(audioPath, duration) {
   });
 }
 
-// Gemini ပေးတဲ့ အချိန်ကို တကယ့်စကားပြောချိန်နဲ့ ပြန်ညှိ (start နဲ့ end နှစ်ခုလုံး)
 function calibrateTimed(timed, sp, duration) {
   const gs = Math.min(...timed.map((t) => t.start));
   const ge = Math.max(...timed.map((t) => t.end));
@@ -492,7 +480,6 @@ function calibrateTimed(timed, sp, duration) {
   return out;
 }
 
-// အချိန်မပါလာရင် စာလုံးအရေအတွက်အလိုက် စကားပြောချိန်တစ်လျှောက် ဖြန့်ချ
 function autoTime(segments, sp) {
   const total = segments.reduce((a, s) => a + s.text.length, 0) || 1;
   const span = Math.max(1, sp.speechEnd - sp.speechStart);
@@ -526,7 +513,7 @@ async function tempoPcm(pcm, rate, t, dir, idx) {
   return fs.readFileSync(outF);
 }
 
-// ဝါကျတစ်ခုချင်းကို မူရင်း start နေရာမှာ ချပေးပြီး slot (end) ကို မကျော်စေရ
+// ဝါကျတစ်ခုချင်းကို start နေရာမှာချပြီး နောက်ဝါကျမစခင်အထိ ဆက်ပြောခွင့်ပေးသည်
 async function buildTimeline(parts, timed, duration, rate, dir) {
   const bytesPerSec = rate * 2;
   const placed = [];
@@ -534,7 +521,7 @@ async function buildTimeline(parts, timed, duration, rate, dir) {
     let pcm = parts[i].pcm;
     const start = timed[i].start;
     const nextStart = i + 1 < timed.length ? timed[i + 1].start : duration;
-    const hardEnd = Math.min(timed[i].end + 0.3, nextStart - 0.05, duration);
+    const hardEnd = Math.min(nextStart - 0.05, duration);
     const slot = Math.max(0.5, hardEnd - start);
     const dur = pcm.length / bytesPerSec;
     if (dur > slot) {
@@ -639,7 +626,7 @@ class NoSpeechError extends Error {
   }
 }
 
-/* ---- Groq Whisper: segment timestamp တိကျသည် ---- */
+/* ---- Groq Whisper ---- */
 async function groqTranscribeSegments(filePath, sourceLanguage) {
   const form = new FormData();
   form.append("file", new Blob([fs.readFileSync(filePath)], { type: "audio/mpeg" }), "audio.mp3");
@@ -664,13 +651,12 @@ async function groqTranscribeSegments(filePath, sourceLanguage) {
     .map((s) => ({ start: Number(s.start), end: Number(s.end), text: String(s.text).trim() }));
 }
 
-// တိုလွန်းတဲ့ segment တွေကို ကပ်ပေါင်း (အပိုင်းတိုလွန်းရင် TTS မကိုက်)
 function mergeShortSegments(segs, maxLen = 9) {
   const out = [];
   for (const s of segs) {
     const last = out[out.length - 1];
     if (last && (last.end - last.start < 1.5 || s.end - s.start < 0.8) &&
-        s.start - last.end < 0.6 && s.end - last.start <= maxLen) {
+        s.start - last.end < 0.6 && s.end - s.start <= maxLen) {
       last.end = s.end;
       last.text += " " + s.text;
     } else {
@@ -695,7 +681,6 @@ async function myMemoryTranslate(text, sourceLanguage, targetLanguage = "my") {
   return out.join(" ");
 }
 
-// segment တစ်ခုချင်းကို slot အရှည်နဲ့ကိုက်အောင် စာလုံးကန့်ပြီး ဘာသာပြန် (အသံပါပို့ရင် စကားပြောသူ အမျိုးအစားပါ ခွဲပေးသည်)
 // return: [{ tag, text }]
 async function translateSegments(segs, sourceLanguage, targetLanguage, audioBase64 = null, defaultTag = "B") {
   const cps = CHARS_PER_SEC[targetLanguage] || 11;
@@ -756,7 +741,7 @@ async function whisperPath(audioPath, opts, job) {
   setJob(job, { progress: 20, message: "စကားပြောသံနဲ့ အချိန်တွေကို နားထောင်နေပါသည်..." });
   let segs = await groqTranscribeSegments(audioPath, opts.sourceLanguage);
   if (!segs.length) throw new NoSpeechError();
-  segs = mergeShortSegments(segs);
+  if (MERGE_SHORT) segs = mergeShortSegments(segs);
   setJob(job, { progress: 28, message: "အသံအမျိုးအစား ခွဲပြီး ဘာသာပြန်နေပါသည်..." });
   const defaultTag = opts.voice === "female" ? "G" : "B";
   const audioBase64 = ai ? fs.readFileSync(audioPath).toString("base64") : null;
@@ -827,7 +812,6 @@ async function processJob(job, file, opts) {
     const audioPath = path.join(dir, "audio.mp3");
     await runFfmpeg(["-i", file.path, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", audioPath]);
 
-    /* ---- အချိန်ပါတဲ့ ဘာသာပြန် segments ရယူ ---- */
     let timed = null;
     let displayText = "";
 
@@ -898,14 +882,22 @@ async function processJob(job, file, opts) {
     fs.writeFileSync(pcmPath, pcm);
     await runFfmpeg(["-f", "s16le", "-ar", String(ttsRate), "-ac", "1", "-i", pcmPath, ttsWav]);
 
-    /* ---- mux (global tempo မသုံးတော့ - timeline က ဗီဒီယိုအရှည်အတိုင်းပြီးသား) ---- */
+    /* ---- mux: ဗီဒီယိုပုံကိုသာယူ၊ မူရင်းအသံ လုံးဝမပါ ---- */
     setJob(job, { progress: 85, message: "အသံအသစ်ကို ဗီဒီယိုနဲ့ ပေါင်းနေပါသည်..." });
     const fadeOutStart = Math.max(0, info.duration - 0.15);
     const filter = `[1:a]afade=t=in:st=0:d=0.05,afade=t=out:st=${fadeOutStart.toFixed(2)}:d=0.15,apad[a]`;
 
     const outPath = path.join(dir, "output.mp4");
-    const baseArgs = ["-i", file.path, "-i", ttsWav, "-filter_complex", filter, "-map", "0:v:0", "-map", "[a]"];
-    const tailArgs = ["-c:a", "aac", "-b:a", "128k", "-t", String(info.duration), "-movflags", "+faststart", outPath];
+    const baseArgs = [
+      "-i", file.path, "-i", ttsWav,
+      "-filter_complex", filter,
+      "-map", "0:v:0", "-map", "[a]",
+      "-map_metadata", "-1"
+    ];
+    const tailArgs = [
+      "-c:a", "aac", "-b:a", "128k", "-ac", "2",
+      "-t", String(info.duration), "-movflags", "+faststart", outPath
+    ];
 
     try {
       await runFfmpeg([...baseArgs, "-c:v", "copy", ...tailArgs]);
@@ -947,7 +939,6 @@ app.post("/api/translate", rateLimit, upload.single("video"), (req, res) => {
     return res.status(500).json({ error: "Render Environment ထဲတွင် GROQ_API_KEY သို့မဟုတ် GEMINI_API_KEY မရှိသေးပါ။" });
   }
 
-  // QUOTA_ENABLED=true ထားမှသာ quota စစ်မည် (မထားရင် ရှိပြီးသား page အတိုင်း အလုပ်လုပ်)
   let devId = null;
   let quota = null;
   if (QUOTA_ENABLED) {
