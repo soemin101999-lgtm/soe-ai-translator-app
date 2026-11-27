@@ -194,7 +194,7 @@ async function edgeTtsChunk(text, voiceKey, dir, idx, target) {
     getTarget(target).edge[edgeVoiceKey] || getTarget(target).edge.male,
     OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS
   );
-  const ssmlText = `<prosody rate="+10%">${escapeXml(text)}</prosody>`;
+  const ssmlText = `<prosody rate="+0%">${escapeXml(text)}</prosody>`;
   const { audioStream } = await tts.toStream(ssmlText);
   const bufs = [];
   await new Promise((resolve, reject) => {
