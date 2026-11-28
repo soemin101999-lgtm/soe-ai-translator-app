@@ -78,30 +78,6 @@
     textarea { min-height: 120px; resize: vertical; }
     .file-box { margin-bottom: 14px; }
     .file-info { font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
-
-    .blur-toggle {
-      display: flex; align-items: center; gap: 8px;
-      margin: 12px 0 6px; font-size: 0.92rem; color: var(--text); cursor: pointer;
-    }
-    .blur-toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
-    #blurWrap {
-      margin-bottom: 14px; padding: 10px; border-radius: 12px;
-      background: var(--card-2); border: 1px solid var(--border);
-    }
-    #pvBox { position: relative; touch-action: none; width: 100%; overflow: hidden; border-radius: 8px; }
-    #pv { width: 100%; display: block; border-radius: 8px; background: #000; }
-    #blurBox {
-      position: absolute; border: 2px solid var(--accent);
-      background: rgba(56, 189, 248, 0.28); touch-action: none;
-    }
-    #hdl {
-      position: absolute; right: -2px; bottom: -2px; width: 28px; height: 28px;
-      background: var(--accent); border-radius: 8px 0 8px 0; cursor: nwse-resize;
-    }
-    .sl { display: flex; gap: 10px; align-items: center; font-size: 0.85rem; color: var(--muted); margin-top: 8px; }
-    .sl input[type="range"] { flex: 1; accent-color: var(--accent); }
-    .blur-hint { font-size: 0.78rem; color: var(--muted); margin-top: 6px; line-height: 1.45; }
-
     .primary-btn {
       width: 100%; padding: 12px 16px; border: none; border-radius: 10px;
       background: var(--accent); color: #06131f; font-weight: 700;
@@ -247,21 +223,6 @@
           <label for="videoInput">ဗီဒီယိုဖိုင် ရွေးချယ်ပါ (၅ မိနစ်အောက် / 100MB အောက် MP4 / MOV)</label>
           <input id="videoInput" type="file" accept="video/*" required />
           <div id="fileInfo" class="file-info"></div>
-
-          <label class="blur-toggle">
-            <input type="checkbox" id="hideText" />
-            စာသားကို မှုန်ဝါးမည်
-          </label>
-
-          <div id="blurWrap" class="hidden">
-            <div id="pvBox">
-              <video id="pv" muted playsinline></video>
-              <div id="blurBox"><div id="hdl"></div></div>
-            </div>
-            <div class="sl">အကျယ် <input type="range" id="bw" min="10" max="100" value="100" /></div>
-            <div class="sl">အမြင့် <input type="range" id="bh" min="5" max="60" value="18" /></div>
-            <div class="blur-hint">ဘောက်စ်ကို ဆွဲရွှေ့ပါ၊ ထောင့်က ကွက်ကို ဆွဲပြီး အရွယ်ပြောင်းပါ၊ ပုံပေါ်ကို ထိရင် အဲဒီနေရာသို့ ရောက်ပါမယ်။</div>
-          </div>
         </div>
 
         <button id="videoBtn" type="submit" class="primary-btn">ဗီဒီယို ဘာသာပြန်မည်</button>
@@ -514,97 +475,15 @@
       });
     });
 
-    /* ---------- Blur box ---------- */
-    const hideTextCb = document.getElementById("hideText");
-    const blurWrap = document.getElementById("blurWrap");
-    const pvBox = document.getElementById("pvBox");
-    const pv = document.getElementById("pv");
-    const blurBox = document.getElementById("blurBox");
-    const bwInput = document.getElementById("bw");
-    const bhInput = document.getElementById("bh");
-    const blur = { x: 0, y: 78, w: 100, h: 18 };
-
-    function drawBlurBox() {
-      blur.w = Math.min(100, Math.max(10, Number(blur.w) || 10));
-      blur.h = Math.min(60, Math.max(5, Number(blur.h) || 5));
-      blur.x = Math.min(Math.max(0, Number(blur.x) || 0), 100 - blur.w);
-      blur.y = Math.min(Math.max(0, Number(blur.y) || 0), 100 - blur.h);
-      blurBox.style.left = blur.x + "%";
-      blurBox.style.top = blur.y + "%";
-      blurBox.style.width = blur.w + "%";
-      blurBox.style.height = blur.h + "%";
-      bwInput.value = Math.round(blur.w);
-      bhInput.value = Math.round(blur.h);
-    }
-
-    function toggleBlurWrap() {
-      const hasFile = Boolean(videoInput.files && videoInput.files[0]);
-      blurWrap.classList.toggle("hidden", !(hideTextCb.checked && hasFile));
-      drawBlurBox();
-    }
-
-    hideTextCb.addEventListener("change", toggleBlurWrap);
-    bwInput.addEventListener("input", () => { blur.w = +bwInput.value; drawBlurBox(); });
-    bhInput.addEventListener("input", () => { blur.h = +bhInput.value; drawBlurBox(); });
-
-    let blurDrag = null;
-    pvBox.addEventListener("pointerdown", (e) => {
-      pvBox.setPointerCapture(e.pointerId);
-      const r = pv.getBoundingClientRect();
-      if (!r.width || !r.height) return;
-      const mode = e.target.id === "hdl" ? "size" : "move";
-      if (e.target.id !== "hdl" && e.target.id !== "blurBox") {
-        blur.x = ((e.clientX - r.left) / r.width) * 100 - blur.w / 2;
-        blur.y = ((e.clientY - r.top) / r.height) * 100 - blur.h / 2;
-        drawBlurBox();
-      }
-      blurDrag = { mode, px: e.clientX, py: e.clientY, x: blur.x, y: blur.y, w: blur.w, h: blur.h };
-    });
-    pvBox.addEventListener("pointermove", (e) => {
-      if (!blurDrag) return;
-      const r = pv.getBoundingClientRect();
-      if (!r.width || !r.height) return;
-      const dx = ((e.clientX - blurDrag.px) / r.width) * 100;
-      const dy = ((e.clientY - blurDrag.py) / r.height) * 100;
-      if (blurDrag.mode === "size") {
-        blur.w = Math.min(blurDrag.w + dx, 100 - blur.x);
-        blur.h = Math.min(blurDrag.h + dy, 100 - blur.y);
-      } else {
-        blur.x = blurDrag.x + dx;
-        blur.y = blurDrag.y + dy;
-      }
-      drawBlurBox();
-    });
-    pvBox.addEventListener("pointerup", () => { blurDrag = null; });
-    pvBox.addEventListener("pointercancel", () => { blurDrag = null; });
-    drawBlurBox();
-
     /* ---------- File Selection Info ---------- */
     const videoInput = document.getElementById("videoInput");
     const fileInfo = document.getElementById("fileInfo");
-    let previewUrl = null;
     videoInput.addEventListener("change", () => {
       const file = videoInput.files && videoInput.files[0];
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-        previewUrl = null;
-      }
-      if (!file) {
-        fileInfo.textContent = "";
-        pv.removeAttribute("src");
-        toggleBlurWrap();
-        return;
-      }
+      if (!file) { fileInfo.textContent = ""; return; }
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
       fileInfo.textContent = `ရွေးချယ်ထားသောဖိုင်: ${file.name} (${sizeMB} MB)`;
       fileInfo.style.color = file.size > MAX_VIDEO_MB * 1024 * 1024 ? "var(--danger)" : "var(--muted)";
-
-      previewUrl = URL.createObjectURL(file);
-      pv.src = previewUrl;
-      pv.onloadedmetadata = () => {
-        pv.currentTime = Math.min(1, (pv.duration || 2) / 2);
-      };
-      toggleBlurWrap();
     });
 
     /* ---------- Video ---------- */
@@ -754,11 +633,6 @@
         fd.append("sourceLanguage", document.getElementById("sourceLang").value);
         fd.append("targetLanguage", document.getElementById("targetLang").value);
         fd.append("voice", document.getElementById("voiceSelect").value);
-        fd.append("hideText", String(hideTextCb.checked));
-        fd.append("hx", String(blur.x));
-        fd.append("hy", String(blur.y));
-        fd.append("hw", String(blur.w));
-        fd.append("hh", String(blur.h));
 
         const res = await fetch(`${API_BASE}/api/translate`, { method: "POST", body: fd });
         const data = await res.json();
