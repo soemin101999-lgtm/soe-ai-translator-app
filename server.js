@@ -436,33 +436,6 @@ function probeVideo(file) {
   });
 }
 
-function parseBlurRegion(opts) {
-  if (!opts?.hideText) return null;
-  const xPct = Number(opts.hx);
-  const yPct = Number(opts.hy);
-  const wPct = Number(opts.hw);
-  const hPct = Number(opts.hh);
-  if (![xPct, yPct, wPct, hPct].every(Number.isFinite)) return null;
-  const w = Math.min(1, Math.max(0.05, wPct / 100));
-  const h = Math.min(1, Math.max(0.03, hPct / 100));
-  const x = Math.min(Math.max(0, xPct / 100), 1 - w);
-  const y = Math.min(Math.max(0, yPct / 100), 1 - h);
-  return { x, y, w, h };
-}
-
-function buildBlurVideoFilter(region) {
-  if (!region) return null;
-  const rx = `max(0,min(iw-2,floor(iw*${region.x.toFixed(4)})))`;
-  const ry = `max(0,min(ih-2,floor(ih*${region.y.toFixed(4)})))`;
-  const rw = `max(2,min(iw-${rx},floor(iw*${region.w.toFixed(4)})))`;
-  const rh = `max(2,min(ih-${ry},floor(ih*${region.h.toFixed(4)})))`;
-  return (
-    `[0:v]split[vorig][vblur];` +
-    `[vblur]crop=w=${rw}:h=${rh}:x=${rx}:y=${ry},boxblur=18:3[blurred];` +
-    `[vorig][blurred]overlay=x=${rx}:y=${ry}[vout]`
-  );
-}
-
 /* ---------------- timing helpers ---------------- */
 const TS_PREFIX = /^\s*\[?\s*\d+(?:\.\d+)?\s*[-–]\s*\d+(?:\.\d+)?\s*\]?\s*[|:]?\s*/;
 
@@ -949,44 +922,27 @@ async function processJob(job, file, opts) {
     fs.writeFileSync(pcmPath, pcm);
     await runFfmpeg(["-f", "s16le", "-ar", String(ttsRate), "-ac", "1", "-i", pcmPath, ttsWav]);
 
-    /* ---- mux: ဗီဒီယိုပုံ (လိုအပ်လျှင် blur ပါ) + အသံအသစ်၊ မူရင်းအသံ လုံးဝမပါ ---- */
+    /* ---- mux: မူရင်းဗီဒီယိုပုံ + အသံအသစ်၊ မူရင်းအသံ လုံးဝမပါ ---- */
     setJob(job, { progress: 85, message: "အသံအသစ်ကို ဗီဒီယိုနဲ့ ပေါင်းနေပါသည်..." });
-    const blurRegion = parseBlurRegion(opts);
-    const blurFilter = buildBlurVideoFilter(blurRegion);
     const fadeOutStart = Math.max(0, info.duration - 0.15);
     const audioFilter = `[1:a]afade=t=in:st=0:d=0.05,afade=t=out:st=${fadeOutStart.toFixed(2)}:d=0.15,apad[a]`;
 
     const outPath = path.join(dir, "output.mp4");
-    const baseArgs = blurFilter
-      ? [
-          "-i", file.path, "-i", ttsWav,
-          "-filter_complex", `${blurFilter};${audioFilter}`,
-          "-map", "[vout]", "-map", "[a]",
-          "-map_metadata", "-1"
-        ]
-      : [
-          "-i", file.path, "-i", ttsWav,
-          "-filter_complex", audioFilter,
-          "-map", "0:v:0", "-map", "[a]",
-          "-map_metadata", "-1"
-        ];
+    const baseArgs = [
+      "-i", file.path, "-i", ttsWav,
+      "-filter_complex", audioFilter,
+      "-map", "0:v:0", "-map", "[a]",
+      "-map_metadata", "-1"
+    ];
     const tailArgs = [
       "-c:a", "aac", "-b:a", "128k", "-ac", "2",
       "-t", String(info.duration), "-movflags", "+faststart", outPath
     ];
 
     try {
-      if (blurFilter) {
-        await runFfmpeg([
-          ...baseArgs,
-          "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
-          ...tailArgs
-        ]);
-      } else {
-        await runFfmpeg([...baseArgs, "-c:v", "copy", ...tailArgs]);
-      }
+      await runFfmpeg([...baseArgs, "-c:v", "copy", ...tailArgs]);
     } catch (copyErr) {
-      console.error("Video mux/encode failed, retrying with ultrafast:", copyErr.message);
+      console.error("Video copy failed, re-encoding:", copyErr.message);
       setJob(job, { progress: 90, message: "ဗီဒီယိုကို ပြန်လည်ပြင်ဆင်နေပါသည်... (အချိန်ကြာနိုင်သည်)" });
       await runFfmpeg([
         ...baseArgs,
@@ -1059,12 +1015,7 @@ app.post("/api/translate", rateLimit, upload.single("video"), (req, res) => {
   const opts = {
     sourceLanguage: req.body?.sourceLanguage || "auto",
     targetLanguage: TARGETS[req.body?.targetLanguage] ? req.body.targetLanguage : "my",
-    voice: req.body?.voice || "male",
-    hideText: req.body?.hideText === "true" || req.body?.hideText === true,
-    hx: req.body?.hx,
-    hy: req.body?.hy,
-    hw: req.body?.hw,
-    hh: req.body?.hh
+    voice: req.body?.voice || "male"
   };
 
   enqueue(job, req.file, opts);
