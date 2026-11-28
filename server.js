@@ -209,9 +209,9 @@ async function edgeTtsChunk(text, voiceKey, dir, idx, target) {
   return { pcm: fs.readFileSync(outFile), rate: TTS_SAMPLE_RATE };
 }
 
-// အသံ engine တစ်မျိုးတည်းကိုသာ သုံးသည် (အသံပုံစံ မရောစေရန် engine မပြောင်းပါ)
-async function synthChunk(text, voiceKey, dir, idx, target) {
-  if (TTS_PRIORITY === "gemini") {
+// job တစ်ခုလုံးကို engine တစ်မျိုးတည်းနဲ့ ဖတ်သည် (chunk တစ်ခုချင်း engine မပြောင်းပါ)
+async function synthChunk(engine, text, voiceKey, dir, idx, target) {
+  if (engine === "gemini") {
     if (!ai) throw new Error("GEMINI_API_KEY မရှိပါ။");
     return await geminiTtsChunk(text, voiceKey);
   }
@@ -471,22 +471,46 @@ async function processJob(job, file, opts) {
     }
     console.log(`[job ${job.id.slice(0, 6)}] TTS segments: ${segments.length}`);
 
-    const pcmParts = new Array(segments.length);
-    let nextIdx = 0, doneCount = 0;
-    const worker = async () => {
-      while (true) {
-        const i = nextIdx++;
-        if (i >= segments.length) return;
-        const seg = segments[i];
-        pcmParts[i] = await synthChunk(seg.text, seg.voiceKey, dir, i, opts.targetLanguage);
-        doneCount++;
-        setJob(job, {
-          progress: 35 + Math.round((doneCount / segments.length) * 45),
-          message: `အသံ ဖန်တီးနေပါသည်... (${doneCount}/${segments.length})`
-        });
-      }
+    // engine တစ်ခုနဲ့ segment အားလုံးကို ဖတ်ပြီး အောင်မြင်မှ ပြန်ပေး
+    const runTts = async (engine) => {
+      const parts = new Array(segments.length);
+      let nextIdx = 0, doneCount = 0, failed = null;
+      const worker = async () => {
+        while (!failed) {
+          const i = nextIdx++;
+          if (i >= segments.length) return;
+          const seg = segments[i];
+          try {
+            parts[i] = await synthChunk(engine, seg.text, seg.voiceKey, dir, `${engine}-${i}`, opts.targetLanguage);
+          } catch (e) {
+            failed = e;
+            return;
+          }
+          doneCount++;
+          setJob(job, {
+            progress: 35 + Math.round((doneCount / segments.length) * 45),
+            message: `အသံ ဖန်တီးနေပါသည်... (${doneCount}/${segments.length})`
+          });
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(TTS_CONCURRENCY, segments.length) }, worker));
+      if (failed) throw failed;
+      return parts;
     };
-    await Promise.all(Array.from({ length: Math.min(TTS_CONCURRENCY, segments.length) }, worker));
+
+    // ပုံသေ Edge (အခမဲ့)။ TTS_PRIORITY=gemini ဆိုရင် Gemini အရင်။
+    // တစ်ခုမရရင် job တစ်ခုလုံးကို တခြား engine နဲ့ အစကပြန်လုပ် (အသံပုံစံ မရောစေရန်)
+    const primary = TTS_PRIORITY === "gemini" ? "gemini" : "edge";
+    const secondary = primary === "gemini" ? "edge" : "gemini";
+    let pcmParts;
+    try {
+      pcmParts = await runTts(primary);
+    } catch (err) {
+      console.error(`${primary} TTS failed, redoing whole job with ${secondary}:`, err.message);
+      if (secondary === "gemini" && !ai) throw err;
+      setJob(job, { progress: 35, message: "အသံ engine ပြောင်းပြီး ပြန်ဖန်တီးနေပါသည်..." });
+      pcmParts = await runTts(secondary);
+    }
     lap("TTS");
 
     const ttsRate = pcmParts[0].rate;
