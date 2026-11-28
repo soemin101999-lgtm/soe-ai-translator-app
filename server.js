@@ -57,7 +57,8 @@ const MAX_TEMPO = 1.6;                 // အသံမပျက်စေဘဲ �
 const GEMINI_TIMEOUT_MS = 90 * 1000;   // Gemini တစ်ခါခေါ်တာ ၉၀ စက္ကန့်ထက် မကြာစေရ
 const TTS_CONCURRENCY = 2;             // Edge TTS တည်ငြိမ်စေရန်
 // TTS_PRIORITY=gemini ထားရင် Gemini အသံတစ်မျိုးတည်းသုံး၊ မဟုတ်ရင် Edge တစ်မျိုးတည်းသုံး (ရောမသုံးပါ)
-const TTS_PRIORITY = (process.env.TTS_PRIORITY || "edge").toLowerCase();
+// (နာမည်အသစ် TTS_ENGINE သုံးထားလို့ Render ထဲက TTS_PRIORITY အဟောင်းက သက်ရောက်မှု မရှိတော့ပါ)
+const TTS_PRIORITY = (process.env.TTS_ENGINE || "edge").toLowerCase();
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
